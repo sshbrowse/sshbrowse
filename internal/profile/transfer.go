@@ -251,7 +251,14 @@ func (s *Store) ApplySnapshot(incoming Snapshot, replace bool, expectedRevision 
 	if err != nil {
 		return TransferResult{}, err
 	}
-	file := fileFormat{Version: currentFileVersion, Connections: final.Connections, Folders: final.Folders, Onboarding: final.Onboarding}
+	// The recording folder belongs to this device and must survive imports.
+	file := fileFormat{
+		Version:         currentFileVersion,
+		Connections:     final.Connections,
+		Folders:         final.Folders,
+		Onboarding:      final.Onboarding,
+		LoggingSettings: currentFile.LoggingSettings,
+	}
 	serialized, err := json.MarshalIndent(file, "", "  ")
 	if err != nil {
 		return TransferResult{}, err

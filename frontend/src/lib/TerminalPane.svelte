@@ -36,7 +36,12 @@
   import "@xterm/xterm/css/xterm.css";
   import { Clipboard, Events } from "@wailsio/runtime";
   import * as Sessions from "../../bindings/sshbrowse/internal/app/sessions";
-  import type { FileDropEvent, SessionData, SessionExit } from "../../bindings/sshbrowse/internal/app/models";
+  import type {
+    FileDropEvent,
+    SessionData,
+    SessionExit,
+    SessionLoggingState,
+  } from "../../bindings/sshbrowse/internal/app/models";
   import {
     currentPlatform,
     linuxShortcutFor,
@@ -75,6 +80,8 @@
     pasteClipboardForBroadcastGeneration,
     type LiveBroadcastPasteState,
   } from "./liveBroadcast";
+  import { canApplyLoggingResult } from "./sessionLogging";
+  import { errorMessage } from "./errors";
   import { normalizeTerminalScrollback } from "./storage";
   import {
     terminalSearchCommandFor,
@@ -115,6 +122,7 @@
     onpastewarningschange,
     onfocus,
     onclose,
+    oncloseerror,
     onsearchopen = () => {},
   }: {
     sessionId: number;
@@ -151,6 +159,7 @@
     onpastewarningschange: (disabled: boolean) => void;
     onfocus: () => void;
     onclose: () => void;
+    oncloseerror: (sessionLabel: string, logPath: string, message: string) => void;
     onsearchopen?: () => void;
   } = $props();
 
@@ -169,6 +178,11 @@
   let searchResult = $state<ISearchResultChangeEvent>({ resultIndex: -1, resultCount: 0 });
   let searchResultLabel = $derived(terminalSearchResultLabel(searchQuery, searchResult));
   let processInstanceId = $state<number | null>(null);
+  let loggingProcessId: number | null = null;
+  let loggingState = $state<SessionLoggingState | null>(null);
+  let loggingActionError = $state("");
+  let loggingBusy = $state(false);
+  let loggingRevision = 0;
   let disposed = false;
   let status = $state<SessionStatus>("connecting");
   let exitCode = $state<number | null>(null);
@@ -500,6 +514,46 @@
     onstatus(next);
   }
 
+  function applyLoggingState(next: SessionLoggingState) {
+    loggingRevision++;
+    loggingState = {
+      id: next.id,
+      active: next.active && next.error === "" && status !== "closed",
+      path: next.path,
+      error: next.error,
+    };
+    loggingActionError = "";
+  }
+
+  async function toggleLogging(event: MouseEvent) {
+    const id = processInstanceId;
+    if (id === null || status !== "live" || loggingBusy) {
+      return;
+    }
+    // Keep keyboard activation on its button; pointer focus returns to the terminal.
+    if (event.detail > 0) {
+      terminal.focus();
+    }
+    const stopping = loggingState?.active === true;
+    const revision = loggingRevision;
+    loggingBusy = true;
+    loggingActionError = "";
+    try {
+      const next = stopping ? await Sessions.StopLogging(id) : await Sessions.StartLogging(id);
+      if (!disposed && canApplyLoggingResult(next.id, loggingProcessId, revision, loggingRevision)) {
+        applyLoggingState(next);
+      }
+    } catch (error) {
+      if (!disposed && loggingProcessId === id && loggingRevision === revision) {
+        loggingActionError = `Could not ${stopping ? "stop" : "start"} recording: ${errorMessage(error)}`;
+      }
+    } finally {
+      if (!disposed && loggingProcessId === id) {
+        loggingBusy = false;
+      }
+    }
+  }
+
   function requestResize(cols: number, rows: number) {
     if (processInstanceId === null || status !== "live") {
       return;
@@ -542,6 +596,11 @@
     setStatus("connecting");
     exitCode = null;
     const newProcessInstanceId = nextProcessInstanceId++;
+    loggingProcessId = newProcessInstanceId;
+    loggingRevision++;
+    loggingState = null;
+    loggingActionError = "";
+    loggingBusy = false;
     processInstanceId = newProcessInstanceId;
     onprocesschange(newProcessInstanceId);
     try {
@@ -553,28 +612,19 @@
         await Sessions.Open(newProcessInstanceId, $state.snapshot(connection), terminal.cols, terminal.rows);
       }
     } catch (err) {
-      if (disposed) {
+      if (disposed || processInstanceId !== newProcessInstanceId) {
+        // Ignore failures from a process that has exited or been replaced.
         return;
       }
-      if (processInstanceId === newProcessInstanceId) {
-        processInstanceId = null;
-        onprocesschange(null);
-      }
+      processInstanceId = null;
+      onprocesschange(null);
       terminal.write(`\r\n[failed to start ${programName}: ${err}]\r\n`);
       setStatus("closed");
       return;
     }
-    if (disposed) {
-      // The pane was closed while the process was starting; nobody owns it now.
-      if (processInstanceId === newProcessInstanceId) {
-        processInstanceId = null;
-        onprocesschange(null);
-      }
-      Sessions.Close(newProcessInstanceId).catch(console.error);
-      return;
-    }
-    if (processInstanceId !== newProcessInstanceId) {
-      // The process exited while the Open call was returning.
+    if (disposed || processInstanceId !== newProcessInstanceId) {
+      // A pane closed or reconnected while Open was pending.
+      closeSession(newProcessInstanceId, loggingPathForProcess(newProcessInstanceId));
       return;
     }
     setStatus("live");
@@ -590,6 +640,17 @@
     closedInput = "";
     terminal.write("\r\n");
     connect(true);
+  }
+
+  function loggingPathForProcess(id: number): string {
+    return loggingState?.id === id ? loggingState.path : "";
+  }
+
+  function closeSession(id: number, logPath: string) {
+    const closingSessionLabel = sessionLabel;
+    void Sessions.Close(id).catch((error: unknown) => {
+      oncloseerror(closingSessionLabel, logPath, errorMessage(error));
+    });
   }
 
   // Text typed into a closed pane, so "exit" dismisses it like a real shell would.
@@ -749,9 +810,21 @@
         }
         processInstanceId = null;
         onprocesschange(null);
+        const finalLoggingState = loggingState;
+        if (finalLoggingState !== null && finalLoggingState.id === event.data.id && finalLoggingState.active) {
+          // The process has ended; do not leave the pane claiming that its
+          // recorder is still active if the final state event is delayed.
+          loggingRevision++;
+          loggingState = { ...finalLoggingState, active: false };
+        }
         exitCode = event.data.exitCode;
         terminal.write(`\r\n[${programName} exited with code ${exitCode}]\r\n`);
         setStatus("closed");
+      }
+    });
+    const offLogging = Events.On("session:logging", (event: { data: SessionLoggingState }) => {
+      if (!disposed && event.data.id === loggingProcessId) {
+        applyLoggingState(event.data);
       }
     });
     const offFileDrop = Events.On(
@@ -819,6 +892,7 @@
       observer.disconnect();
       offData();
       offExit();
+      offLogging();
       offFileDrop();
       window.removeEventListener(terminalFontEvent, onTerminalFontCommand);
       window.removeEventListener("focus", onWindowFocus);
@@ -840,7 +914,10 @@
       onprocesschange(null);
       pendingResize = null;
       if (closingProcessInstanceId !== null && status === "live") {
-        Sessions.Close(closingProcessInstanceId).catch(console.error);
+        closeSession(
+          closingProcessInstanceId,
+          loggingPathForProcess(closingProcessInstanceId),
+        );
       }
       terminal.dispose();
     };
@@ -915,37 +992,61 @@
   onfocusin={onfocus}
   onfocusout={() => onfocusout(sessionId)}
 >
-  <div
-    class="term"
-    bind:this={container}
-    role="region"
-    aria-label="Terminal"
-    style:--custom-contextmenu="terminal"
-    style:--custom-contextmenu-data={sessionId}
-    oncontextmenu={handleTerminalContextMenu}
-  ></div>
-  {#if searchOpen}
-    <form class="terminal-search" role="search" aria-label="Search terminal output" onsubmit={(event) => event.preventDefault()}>
-      <input
-        bind:this={searchInput}
-        bind:value={searchQuery}
-        aria-label="Find in terminal"
-        placeholder="Find in terminal"
-        maxlength={terminalSearchQueryLimit}
-        autocomplete="off"
-        spellcheck="false"
-        onkeydown={handleSearchKeydown}
-        oninput={handleSearchInput}
-        onfocus={() => search?.refresh()}
-        onblur={() => search?.clearActiveDecoration()}
-      />
-      <span class="search-results" role="status" aria-live="polite">{searchError || searchResultLabel}</span>
-      <button type="button" class:active={searchCaseSensitive} aria-label="Match case" aria-pressed={searchCaseSensitive} title="Match case" onkeydown={handleSearchKeydown} onclick={() => { searchCaseSensitive = !searchCaseSensitive; updateSearch(); }}>Aa</button>
-      <button type="button" aria-label="Previous match" title="Previous match (Shift+Enter)" disabled={!searchQuery || searchResult.resultCount === 0} onkeydown={handleSearchKeydown} onclick={() => navigateSearch("previous")}><ChevronUp size={15} /></button>
-      <button type="button" aria-label="Next match" title="Next match (Enter)" disabled={!searchQuery || searchResult.resultCount === 0} onkeydown={handleSearchKeydown} onclick={() => navigateSearch("next")}><ChevronDown size={15} /></button>
-      <button type="button" aria-label="Close search" title="Close search (Escape)" onkeydown={handleSearchKeydown} onclick={closeSearch}><X size={15} /></button>
-    </form>
+  {#if status === "live" || loggingState?.path || loggingState?.error || loggingActionError}
+    <div class="logging-controls" role="group" aria-label="Session logging">
+      {#if status === "live"}
+        {#if loggingState?.active}
+          <span class="recording-indicator" role="status"><span aria-hidden="true">●</span> Recording</span>
+          <button type="button" class="logging-button" disabled={loggingBusy} onclick={toggleLogging}>Stop</button>
+        {:else}
+          <button type="button" class="logging-button" disabled={loggingBusy} title="Logs can contain sensitive output, including echoed commands." onclick={toggleLogging}>
+            {loggingBusy ? "Starting…" : "Record"}
+          </button>
+        {/if}
+      {/if}
+      {#if loggingState?.path}
+        <span class="logging-path" title={loggingState.path}>{loggingState.path}</span>
+      {/if}
+      {#if loggingState?.error || loggingActionError}
+        <div class="logging-error" role="alert">
+          <span>{loggingActionError || (loggingState?.error ? `Logging failed: ${loggingState.error}` : "")}</span>
+        </div>
+      {/if}
+    </div>
   {/if}
+  <div class="terminal-area">
+    <div
+      class="term"
+      bind:this={container}
+      role="region"
+      aria-label="Terminal"
+      style:--custom-contextmenu="terminal"
+      style:--custom-contextmenu-data={sessionId}
+      oncontextmenu={handleTerminalContextMenu}
+    ></div>
+    {#if searchOpen}
+      <form class="terminal-search" role="search" aria-label="Search terminal output" onsubmit={(event) => event.preventDefault()}>
+        <input
+          bind:this={searchInput}
+          bind:value={searchQuery}
+          aria-label="Find in terminal"
+          placeholder="Find in terminal"
+          maxlength={terminalSearchQueryLimit}
+          autocomplete="off"
+          spellcheck="false"
+          onkeydown={handleSearchKeydown}
+          oninput={handleSearchInput}
+          onfocus={() => search?.refresh()}
+          onblur={() => search?.clearActiveDecoration()}
+        />
+        <span class="search-results" role="status" aria-live="polite">{searchError || searchResultLabel}</span>
+        <button type="button" class:active={searchCaseSensitive} aria-label="Match case" aria-pressed={searchCaseSensitive} title="Match case" onkeydown={handleSearchKeydown} onclick={() => { searchCaseSensitive = !searchCaseSensitive; updateSearch(); }}>Aa</button>
+        <button type="button" aria-label="Previous match" title="Previous match (Shift+Enter)" disabled={!searchQuery || searchResult.resultCount === 0} onkeydown={handleSearchKeydown} onclick={() => navigateSearch("previous")}><ChevronUp size={15} /></button>
+        <button type="button" aria-label="Next match" title="Next match (Enter)" disabled={!searchQuery || searchResult.resultCount === 0} onkeydown={handleSearchKeydown} onclick={() => navigateSearch("next")}><ChevronDown size={15} /></button>
+        <button type="button" aria-label="Close search" title="Close search (Escape)" onkeydown={handleSearchKeydown} onclick={closeSearch}><X size={15} /></button>
+      </form>
+    {/if}
+  </div>
   {#if dropError}
     <div class="banner" role="alert">
       <span>{dropError}</span>
@@ -979,6 +1080,8 @@
 <style>
   .pane {
     position: relative;
+    display: flex;
+    flex-direction: column;
     flex: 1;
     width: 100%;
     min-width: 0;
@@ -986,10 +1089,93 @@
     background: var(--terminal-background);
   }
   .term {
-    position: absolute;
-    inset: 0;
+    position: relative;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
     overflow: hidden;
     background: var(--terminal-background);
+  }
+  .terminal-area {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+  }
+  .logging-controls {
+    position: relative;
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 5px;
+    min-height: 34px;
+    box-sizing: border-box;
+    padding: 3px 8px;
+    pointer-events: none;
+  }
+  .logging-controls > * {
+    pointer-events: auto;
+  }
+  .logging-path {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    font: var(--ui-font-small) var(--font-ui);
+  }
+  .recording-indicator,
+  .logging-button,
+  .logging-error {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 26px;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    font: var(--ui-font-small) var(--font-ui);
+    box-shadow: var(--shadow-panel);
+  }
+  .recording-indicator span {
+    color: var(--status-error);
+  }
+  .logging-button {
+    flex-shrink: 0;
+    cursor: default;
+    white-space: nowrap;
+  }
+  .logging-button:hover:not(:disabled) {
+    background: var(--control-hover);
+    color: var(--text-primary);
+  }
+  .logging-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus-ring);
+  }
+  .logging-button:disabled {
+    cursor: wait;
+    opacity: 0.6;
+  }
+  .logging-error {
+    min-width: 0;
+    border-color: var(--status-error);
+    background: var(--status-error-surface);
+    color: var(--status-error);
+    max-width: min(520px, 100%);
+    overflow-wrap: anywhere;
+  }
+  .logging-error span {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .term :global(.xterm) {
     /* FitAddon subtracts padding on xterm itself when sizing the grid. */

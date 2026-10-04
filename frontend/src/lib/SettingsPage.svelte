@@ -35,6 +35,14 @@
     updateReady,
     checkUpdatesOnStartup,
     updateReleaseURL,
+    loggingDirectory = "",
+    loggingSettingsLoading = false,
+    loggingSettingsReady = true,
+    loggingSettingsBusy = false,
+    loggingSettingsStatus = "",
+    loggingSettingsError = "",
+    onreloadloggingsettings = () => {},
+    onchooseloggingdirectory = () => {},
     onstartupupdatechange,
     onreleasenotes,
     oncheckforupdates,
@@ -77,6 +85,14 @@
     updateReady: boolean;
     checkUpdatesOnStartup: boolean;
     updateReleaseURL: string;
+    loggingDirectory?: string;
+    loggingSettingsLoading?: boolean;
+    loggingSettingsReady?: boolean;
+    loggingSettingsBusy?: boolean;
+    loggingSettingsStatus?: string;
+    loggingSettingsError?: string;
+    onreloadloggingsettings?: () => void;
+    onchooseloggingdirectory?: () => void;
     onstartupupdatechange: (enabled: boolean) => void;
     onreleasenotes: () => void;
     oncheckforupdates: () => void;
@@ -117,14 +133,15 @@
     if (isHexColor(value)) oncustompalettechange({ ...customPalette, [key]: value.toLowerCase() });
   }
 
-  type Section = "general" | "appearance" | "terminal" | "data";
+  type Section = "general" | "appearance" | "terminal" | "logging" | "data";
   const sectionLabels: Record<Section, string> = {
     general: "General",
     appearance: "Appearance",
     terminal: "Terminal",
+    logging: "Logging",
     data: "Backup & restore",
   };
-  const sections: Section[] = ["general", "appearance", "terminal", "data"];
+  const sections: Section[] = ["general", "appearance", "terminal", "logging", "data"];
   let selectedSection = $state<Section>("general");
   let pageHeading: HTMLHeadingElement;
   let pageContent: HTMLElement;
@@ -382,6 +399,37 @@
               <p id="scrollback-warning" class="hint">Lowering this limit removes the oldest retained lines in every open terminal. Removed output cannot be recovered.</p>
             </section>
           {/if}
+          {#if selectedSection === "logging"}
+            <section aria-labelledby="logging-heading">
+              <div class="section-heading">
+                <h2 id="logging-heading">Session logging</h2>
+                <p>Record terminal output to a text file. Each recording stops at 100 MiB; the terminal keeps running.</p>
+              </div>
+              <div class="setting-group">
+                <div class="setting-row">
+                  <div><strong>Recording folder</strong><span>Files are grouped by day in this folder.</span></div>
+                  <div class="directory-picker">
+                    <input aria-label="Recording folder" class="technical" value={loggingDirectory} title={loggingDirectory} readonly />
+                    <button class="update-button" type="button" disabled={loggingSettingsLoading || !loggingSettingsReady || loggingSettingsBusy} onclick={onchooseloggingdirectory}>
+                      {loggingSettingsBusy ? "Saving…" : "Choose…"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {#if loggingSettingsError}
+                <p class="logging-settings-status error" role="alert">{loggingSettingsError}</p>
+                {#if !loggingSettingsReady}
+                  <div class="logging-settings-actions">
+                    <button class="update-button" type="button" disabled={loggingSettingsLoading} onclick={onreloadloggingsettings}>Retry loading settings</button>
+                  </div>
+                {/if}
+              {:else if loggingSettingsLoading}
+                <p class="logging-settings-status" role="status">Loading logging settings…</p>
+              {:else if loggingSettingsStatus}
+                <p class="logging-settings-status" role="status">{loggingSettingsStatus}</p>
+              {/if}
+            </section>
+          {/if}
         </div>
       </main>
     </div>
@@ -532,6 +580,11 @@
     color: var(--text-primary);
     font: inherit;
   }
+  .directory-picker { display: flex; flex: 1 1 340px; align-items: center; gap: 8px; min-width: 0; }
+  .directory-picker input { flex: 1; min-width: 0; min-height: 38px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--input-surface); color: var(--text-secondary); font: var(--ui-font-small) ui-monospace, "SF Mono", Menlo, monospace; }
+  .logging-settings-status { margin: 12px 0 0; color: var(--text-secondary); font-size: var(--ui-font-small); }
+  .logging-settings-status.error { color: var(--status-error); }
+  .logging-settings-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
   .stepper button { min-width: 34px; font-size: 20px; }
   .stepper button:disabled { opacity: .45; }
   output { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
