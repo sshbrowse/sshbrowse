@@ -346,13 +346,13 @@ jobs:
           - Windows: run `SSHBrowse-Windows-x64-Setup.exe`.
           - Linux: install a DEB/RPM package, or use the per-user install below for in-app updates. Requires Linux x86-64, GTK4, WebKitGTK 6.0, and OpenSSH.
 
-          The [installer script](https://github.com/osmocomet/sshbrowse/blob/main/build/linux/install.sh) downloads the latest binary and icon and creates the launcher without sudo:
+          The [installer script](https://github.com/sshbrowse/sshbrowse/blob/main/build/linux/install.sh) downloads the latest binary and icon and creates the launcher without sudo:
 
           ```bash
-          curl -fsSLO https://github.com/osmocomet/sshbrowse/releases/latest/download/install.sh && bash install.sh
+          curl -fsSLO https://github.com/sshbrowse/sshbrowse/releases/latest/download/install.sh && bash install.sh
           ```
 
-          For manual installation, verify `SSHBrowse-Linux-x86_64` and `sshbrowse.png` against `SHA256SUMS`. Put the executable at `~/.local/bin/sshbrowse` with executable permissions and the icon at `~/.local/share/icons/hicolor/256x256/apps/sshbrowse.png`. Create `~/.local/share/applications/io.github.osmocomet.sshbrowse.desktop` with `[Desktop Entry]`, `Type=Application`, `Name=SSHBrowse`, `Exec` set to the quoted absolute executable path, and `Icon=sshbrowse`.
+          For manual installation, verify `SSHBrowse-Linux-x86_64` and `sshbrowse.png` against `SHA256SUMS`. Put the executable at `~/.local/bin/sshbrowse` with executable permissions and the icon at `~/.local/share/icons/hicolor/256x256/apps/sshbrowse.png`. Create `~/.local/share/applications/io.github.sshbrowse.sshbrowse.desktop` with `[Desktop Entry]`, `Type=Application`, `Name=SSHBrowse`, `Exec` set to the quoted absolute executable path, and `Icon=sshbrowse`.
 
           Launch SSHBrowse from your desktop menu or `~/.local/bin/sshbrowse`; use the app for future updates.
 

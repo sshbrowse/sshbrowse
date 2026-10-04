@@ -15,7 +15,7 @@ mkdir -p -- "$home_dir/.local/bin"
 stage="$(mktemp -d "$home_dir/.local/bin/.sshbrowse-install.XXXXXX")"
 trap 'rm -rf -- "$stage"' EXIT
 cd -- "$stage"
-repository=https://github.com/osmocomet/sshbrowse
+repository=https://github.com/sshbrowse/sshbrowse
 release="$(fetch -o /dev/null -w '%{url_effective}' "$repository/releases/latest")"
 download="${release/\/tag\//\/download\/}"
 fetch "$download/SHA256SUMS" -o SHA256SUMS
@@ -39,6 +39,6 @@ Exec="$desktop_exec"
 Icon=sshbrowse
 EOF
 install -Dm 0644 sshbrowse.png "$home_dir/.local/share/icons/hicolor/256x256/apps/sshbrowse.png"
-install -Dm 0644 sshbrowse.desktop "$home_dir/.local/share/applications/io.github.osmocomet.sshbrowse.desktop"
+install -Dm 0644 sshbrowse.desktop "$home_dir/.local/share/applications/io.github.sshbrowse.sshbrowse.desktop"
 mv -T -- SSHBrowse-Linux-x86_64 "$binary"
 printf 'Installed SSHBrowse. Launch it with %s\n' "$binary"

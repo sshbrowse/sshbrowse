@@ -24,11 +24,11 @@ while (( $# )); do
     *) shift ;;
   esac
 done
-if [[ "$url" == https://github.com/osmocomet/sshbrowse/releases/latest ]]; then
-  printf 'https://github.com/osmocomet/sshbrowse/releases/tag/v1.2.3'
+if [[ "$url" == https://github.com/sshbrowse/sshbrowse/releases/latest ]]; then
+  printf 'https://github.com/sshbrowse/sshbrowse/releases/tag/v1.2.3'
   exit 0
 fi
-[[ "$url" == https://github.com/osmocomet/sshbrowse/releases/download/v1.2.3/* ]] || exit 2
+[[ "$url" == https://github.com/sshbrowse/sshbrowse/releases/download/v1.2.3/* ]] || exit 2
 asset="${url##*/}"
 [[ "$asset" != "${SSHBROWSE_TEST_FAIL:-}" ]] || exit 22
 cp -- "$SSHBROWSE_TEST_ASSETS/$asset" "$output"
@@ -46,7 +46,7 @@ export HOME="$stage/home space \"quote\" dollar\$ backtick\` slash\\"
 mkdir -p "$HOME"
 bash "$installer" > "$stage/output"
 binary="$HOME/.local/bin/sshbrowse"
-desktop="$HOME/.local/share/applications/io.github.osmocomet.sshbrowse.desktop"
+desktop="$HOME/.local/share/applications/io.github.sshbrowse.sshbrowse.desktop"
 [[ -x "$binary" && -f "$desktop" && -f "$HOME/.local/share/icons/hicolor/256x256/apps/sshbrowse.png" ]]
 cmp "$binary" "$stage/assets/SSHBrowse-Linux-x86_64"
 if bash "$installer" > "$stage/output" 2>&1; then exit 1; fi
@@ -76,7 +76,7 @@ for failure in download checksum missing-checksum; do
       (cd "$stage/assets" && sha256sum sshbrowse.png > SHA256SUMS) ;;
   esac
   if bash "$installer" > "$stage/output" 2>&1; then echo "$failure unexpectedly succeeded" >&2; exit 1; fi
-  [[ ! -e "$HOME/.local/bin/sshbrowse" && ! -e "$HOME/.local/share/applications/io.github.osmocomet.sshbrowse.desktop" ]]
+  [[ ! -e "$HOME/.local/bin/sshbrowse" && ! -e "$HOME/.local/share/applications/io.github.sshbrowse.sshbrowse.desktop" ]]
   [[ -z "$(find "$HOME" -name '.sshbrowse-install.*' -print)" ]]
 done
 echo 'Linux bootstrap installer checks passed.'
