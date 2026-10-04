@@ -5,7 +5,7 @@ go 1.27.1
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/creack/pty v1.1.24
-	github.com/wailsapp/wails/v3 v3.0.0-beta.26
+	github.com/wailsapp/wails/v3 v3.0.0-beta.27
 	golang.org/x/sys v0.48.0
 )
 
