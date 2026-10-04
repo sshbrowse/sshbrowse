@@ -38,9 +38,9 @@ func updateInfoFor(platform, arch, executablePath, version string, initErr error
 	case !isStableReleaseVersion(version):
 		info.Availability = "development"
 		info.Message = "In-app updates are unavailable for development builds."
-	case platform == "linux":
+	case platform == "linux" && !supportsUpdaterFor(platform, arch, executablePath, version):
 		info.Availability = "package-manager"
-		info.Message = "Updates for DEB and RPM installations are handled by your package manager."
+		info.Message = "In-app updates are available for Linux x86-64 per-user installs at ~/.local/bin/sshbrowse. DEB/RPM installations should be updated through your package manager."
 	case !supportsUpdaterFor(platform, arch, executablePath, version):
 		info.Availability = "unsupported"
 		info.Message = "In-app updates are unavailable for this installation."
@@ -79,9 +79,18 @@ func ConfigureUpdater(wailsApp *application.App, executablePath string, quitGuar
 	}
 
 	coordinator := &updateCoordinator{}
+	if runtime.GOOS == "linux" {
+		coordinator.linuxFinish = make(chan func() error, 1)
+	}
 	host := newGuardedUpdaterHost(wailsApp, quitGuard, coordinator)
 	wailsUpdater := updater.New(host)
-	host.restartUpdate = wailsUpdater.Restart
+	if runtime.GOOS == "linux" {
+		host.restartUpdate = func(ctx context.Context) error {
+			return queueLinuxUpdateRestart(ctx, executablePath, wailsUpdater.DownloadedPath(), coordinator, host.Quit)
+		}
+	} else {
+		host.restartUpdate = wailsUpdater.Restart
+	}
 	provider := checksumRequiredProvider{provider: githubProvider}
 	if err := wailsUpdater.Init(updater.Config{
 		CurrentVersion: buildinfo.VersionValue(),
@@ -146,6 +155,21 @@ type updateCoordinator struct {
 	updateRunning  bool
 	restartRunning bool
 	restartPending bool
+	linuxFinish    chan func() error
+}
+
+// CompleteUpdateRestart applies a prepared Linux update after Wails.Run has
+// returned and finished shutting down the app's services and windows.
+func CompleteUpdateRestart(coordinator *updateCoordinator) error {
+	if coordinator == nil || coordinator.linuxFinish == nil {
+		return nil
+	}
+	select {
+	case finish := <-coordinator.linuxFinish:
+		return finish()
+	default:
+		return nil
+	}
 }
 
 func (c *updateCoordinator) runUpdate(update func() error) (bool, error) {
@@ -226,7 +250,7 @@ func supportsUpdaterFor(platform, arch, executablePath, version string) bool {
 		// writable by the user and can be safely replaced by Wails' helper.
 		return true
 	case "linux":
-		return false
+		return arch == "amd64" && linuxUserInstallEligible(executablePath)
 	default:
 		return false
 	}
@@ -260,6 +284,8 @@ func releaseAssetMatcher(request updater.CheckRequest, assets []github.ReleaseAs
 		expected = "SSHBrowse-macOS-universal.zip"
 	case request.Platform == "windows" && request.Arch == "amd64":
 		expected = "SSHBrowse-Windows-x64-update.zip"
+	case request.Platform == "linux" && request.Arch == "amd64":
+		expected = "SSHBrowse-Linux-x86_64"
 	default:
 		return -1
 	}

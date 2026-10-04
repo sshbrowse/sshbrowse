@@ -238,6 +238,9 @@ jobs:
           wails3 task linux:release ARCH=amd64 VERSION="$VERSION"
           test -f "bin/sshbrowse_${VERSION}_amd64.deb"
           test -f "bin/sshbrowse-${VERSION}.x86_64.rpm"
+          test -f bin/SSHBrowse-Linux-x86_64
+          test -f bin/sshbrowse.png
+          test -x bin/install.sh
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v7
@@ -246,6 +249,9 @@ jobs:
           path: |
             bin/sshbrowse_*_amd64.deb
             bin/sshbrowse-*.x86_64.rpm
+            bin/SSHBrowse-Linux-x86_64
+            bin/sshbrowse.png
+            bin/install.sh
           if-no-files-found: error
           retention-days: 14
 
@@ -271,8 +277,8 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t artifacts < <(find dist -maxdepth 1 -type f -printf '%f\n' | sort)
-          if (( ${#artifacts[@]} != 6 )); then
-            printf 'Expected 6 release artifacts, found %d:\n' "${#artifacts[@]}" >&2
+          if (( ${#artifacts[@]} != 9 )); then
+            printf 'Expected 9 release artifacts, found %d:\n' "${#artifacts[@]}" >&2
             printf '%s\n' "${artifacts[@]}" >&2
             exit 1
           fi
@@ -319,8 +325,8 @@ jobs:
             exit 1
           fi
           mapfile -t artifacts < <(find dist -maxdepth 1 -type f -printf '%f\n' | sort)
-          if (( ${#artifacts[@]} != 6 )); then
-            printf 'Expected 6 release artifacts, found %d:\n' "${#artifacts[@]}" >&2
+          if (( ${#artifacts[@]} != 9 )); then
+            printf 'Expected 9 release artifacts, found %d:\n' "${#artifacts[@]}" >&2
             printf '%s\n' "${artifacts[@]}" >&2
             exit 1
           fi
@@ -338,7 +344,17 @@ jobs:
 
           - macOS: open `SSHBrowse-macOS-universal.dmg`, then drag **SSHBrowse** (`sshbrowse.app`) to **Applications**.
           - Windows: run `SSHBrowse-Windows-x64-Setup.exe`.
-          - Linux: install the DEB/RPM package for your distribution; updates are handled through the package manager.
+          - Linux: install a DEB/RPM package, or use the per-user install below for in-app updates. Requires Linux x86-64, GTK4, WebKitGTK 6.0, and OpenSSH.
+
+          The [installer script](https://github.com/sshbrowse/sshbrowse/blob/main/build/linux/install.sh) downloads the latest binary and icon and creates the launcher without sudo:
+
+          ```bash
+          curl -fsSLO https://github.com/sshbrowse/sshbrowse/releases/latest/download/install.sh && bash install.sh
+          ```
+
+          For manual installation, verify `SSHBrowse-Linux-x86_64` and `sshbrowse.png` against `SHA256SUMS`. Put the executable at `~/.local/bin/sshbrowse` with executable permissions and the icon at `~/.local/share/icons/hicolor/256x256/apps/sshbrowse.png`. Create `~/.local/share/applications/io.github.sshbrowse.sshbrowse.desktop` with `[Desktop Entry]`, `Type=Application`, `Name=SSHBrowse`, `Exec` set to the quoted absolute executable path, and `Icon=sshbrowse`.
+
+          Launch SSHBrowse from your desktop menu or `~/.local/bin/sshbrowse`; use the app for future updates.
 
           The macOS app is ad-hoc signed only; it has no Developer ID signature and is not notarized. Windows artifacts remain unsigned. macOS Gatekeeper may still require **Open** in the security prompt or Privacy & Security settings, and Windows SmartScreen may identify the publisher as unknown. No signing or notarization credentials are used by this release.
           EOF

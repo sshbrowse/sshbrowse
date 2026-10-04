@@ -116,4 +116,7 @@ func main() {
 	if err := wailsApp.Run(); err != nil {
 		log.Fatal(err)
 	}
+	if err := app.CompleteUpdateRestart(updateCoordinator); err != nil {
+		log.Printf("Complete Linux update: %v", err)
+	}
 }
