@@ -16,7 +16,7 @@ import (
 func TestStartupUpdateCheckHasDeadlineAndDoesNotDownload(t *testing.T) {
 	var downloads int
 	provider := staticUpdateProvider{
-		release:       &updater.Release{Version: "2.0.0", Metadata: map[string]any{"github.release.htmlURL": "https://github.com/osmocomet/sshbrowse/releases/tag/v2.0.0"}},
+		release:       &updater.Release{Version: "2.0.0", Metadata: map[string]any{"github.release.htmlURL": "https://github.com/sshbrowse/sshbrowse/releases/tag/v2.0.0"}},
 		downloadCalls: &downloads,
 	}
 	host := &testUpdaterHost{}
@@ -76,13 +76,13 @@ func TestLinuxReleaseCheckOnlyFetchesMetadata(t *testing.T) {
 	var requests int
 	client := &http.Client{Transport: releaseTestTransport(func(request *http.Request) (*http.Response, error) {
 		requests++
-		if request.URL.Path != "/repos/osmocomet/sshbrowse/releases/latest" {
+		if request.URL.Path != "/repos/sshbrowse/sshbrowse/releases/latest" {
 			t.Errorf("unexpected download request: %s", request.URL.Path)
 			return nil, errors.New("unexpected download request")
 		}
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"tag_name":"v2.0.0","html_url":"https://github.com/osmocomet/sshbrowse/releases/tag/v2.0.0","assets":[{"name":"sshbrowse_2.0.0_amd64.deb","browser_download_url":"https://example.invalid/package.deb"}]}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"tag_name":"v2.0.0","html_url":"https://github.com/sshbrowse/sshbrowse/releases/tag/v2.0.0","assets":[{"name":"sshbrowse_2.0.0_amd64.deb","browser_download_url":"https://example.invalid/package.deb"}]}`)),
 		}, nil
 	})}
 	provider, err := github.New(github.Config{Repository: githubRepository, HTTPClient: client, AssetMatcher: linuxReleaseAssetMatcher})
@@ -92,7 +92,7 @@ func TestLinuxReleaseCheckOnlyFetchesMetadata(t *testing.T) {
 	release, started, err := checkUpdateRelease(nil, &updateCoordinator{}, func(ctx context.Context) (*updater.Release, error) {
 		return provider.Check(ctx, updater.CheckRequest{CurrentVersion: "1.0.0", Platform: "linux", Arch: "amd64"})
 	}, startupUpdateTimeout)
-	if err != nil || !started || release == nil || requests != 1 || release.Metadata["github.release.htmlURL"] != "https://github.com/osmocomet/sshbrowse/releases/tag/v2.0.0" {
+	if err != nil || !started || release == nil || requests != 1 || release.Metadata["github.release.htmlURL"] != "https://github.com/sshbrowse/sshbrowse/releases/tag/v2.0.0" {
 		t.Fatalf("Linux check = (%v, %v, %v), requests = %d", release, started, err, requests)
 	}
 }

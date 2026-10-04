@@ -4,10 +4,10 @@ platform: "linux"
 version: "${SSHBROWSER_VERSION}"
 section: "net"
 priority: "optional"
-maintainer: "osmocomet"
+maintainer: "SSHBrowse"
 description: "SSH session manager"
-vendor: "osmocomet"
-homepage: "https://github.com/osmocomet/sshbrowse"
+vendor: "SSHBrowse"
+homepage: "https://github.com/sshbrowse/sshbrowse"
 license: "Proprietary"
 release: "1"
 
@@ -21,7 +21,7 @@ contents:
   - src: "./build/appicon.png"
     dst: "/usr/share/icons/hicolor/256x256/apps/sshbrowse.png"
   - src: "./build/linux/sshbrowse.desktop"
-    dst: "/usr/share/applications/io.github.osmocomet.sshbrowse.desktop"
+    dst: "/usr/share/applications/io.github.sshbrowse.sshbrowse.desktop"
 
 depends:
   - libgtk-4-1

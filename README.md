@@ -6,7 +6,7 @@ Save and organize connections, open sessions in tabs or tiles, and send commands
 
 SSHBrowse is currently in beta. Feedback, bug reports, and contributions are welcome.
 
-[Releases](https://github.com/osmocomet/sshbrowse/releases) · [Report a bug](https://github.com/osmocomet/sshbrowse/issues/new/choose) · [Contribute](CONTRIBUTING.md)
+[Releases](https://github.com/sshbrowse/sshbrowse/releases) · [Report a bug](https://github.com/sshbrowse/sshbrowse/issues/new/choose) · [Contribute](CONTRIBUTING.md)
 
 [![Four SSHBrowse sessions connected to an EVPN network lab in a tiled workspace](assets/network-lab.png)](assets/network-lab.png)
 
@@ -40,7 +40,7 @@ For release downloads, check the architecture and compare the SHA-256 hash with 
 
 ## Get started
 
-Download the latest package from [Releases](https://github.com/osmocomet/sshbrowse/releases).
+Download the latest package from [Releases](https://github.com/sshbrowse/sshbrowse/releases).
 
 After launching SSHBrowse, you can:
 
@@ -57,7 +57,7 @@ for very long wrapped output; clear the terminal or reduce scrollback to resume.
 
 Packaged releases check GitHub for updates at startup, at most once every 24 hours. Disable this in **Settings > General > Updates**. Downloads and restarts require your approval; Linux notifications link to the release so you can install the updated DEB or RPM package.
 
-For connection problems, try the same destination with system OpenSSH (`ssh alias` or `ssh user@host`). Use the [bug report form](https://github.com/osmocomet/sshbrowse/issues/new/choose) for bugs and [SECURITY.md](SECURITY.md) for private vulnerability reports. Redact credentials and private host details.
+For connection problems, try the same destination with system OpenSSH (`ssh alias` or `ssh user@host`). Use the [bug report form](https://github.com/sshbrowse/sshbrowse/issues/new/choose) for bugs and [SECURITY.md](SECURITY.md) for private vulnerability reports. Redact credentials and private host details.
 
 Bug reports, suggestions, and focused pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, contribution terms, and guidance on discussing larger changes first.
 

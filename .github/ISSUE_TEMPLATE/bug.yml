@@ -4,7 +4,7 @@ title: "Bug: "
 body:
   - type: markdown
     attributes:
-      value: "For a security vulnerability, follow [SECURITY.md](https://github.com/osmocomet/sshbrowse/blob/main/SECURITY.md) instead of opening a public issue. Before attaching logs or screenshots, remove passwords, private keys, passphrases, tokens, and other credentials."
+      value: "For a security vulnerability, follow [SECURITY.md](https://github.com/sshbrowse/sshbrowse/blob/main/SECURITY.md) instead of opening a public issue. Before attaching logs or screenshots, remove passwords, private keys, passphrases, tokens, and other credentials."
   - type: input
     id: version
     attributes:

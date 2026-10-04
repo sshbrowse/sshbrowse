@@ -40,9 +40,9 @@ test("startup checks tolerate unavailable preference storage", () => {
 });
 
 test("release links only open this repository's GitHub release pages", () => {
-  const releaseURL = "https://github.com/osmocomet/sshbrowse/releases/tag/v0.2.0";
+  const releaseURL = "https://github.com/sshbrowse/sshbrowse/releases/tag/v0.2.0";
   assert.equal(githubReleaseURL(releaseURL), releaseURL);
-  for (const url of [undefined, "", "javascript:alert(1)", "https://example.invalid/releases/tag/v0.2.0", "https://github.com/other/repo/releases/tag/v0.2.0", "https://user@github.com/osmocomet/sshbrowse/releases/tag/v0.2.0"]) {
+  for (const url of [undefined, "", "javascript:alert(1)", "https://example.invalid/releases/tag/v0.2.0", "https://github.com/other/repo/releases/tag/v0.2.0", "https://user@github.com/sshbrowse/sshbrowse/releases/tag/v0.2.0"]) {
     assert.equal(githubReleaseURL(url), "");
   }
 });

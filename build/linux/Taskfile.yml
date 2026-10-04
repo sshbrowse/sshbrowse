@@ -193,10 +193,10 @@ tasks:
         mkdir -p "$bin_dir" "$applications_dir" "$icons_dir"
         binary_target="$bin_dir/{{.APP_NAME}}"
         icon_target="$icons_dir/{{.APP_NAME}}.png"
-        desktop_target="$applications_dir/io.github.osmocomet.sshbrowse.desktop"
+        desktop_target="$applications_dir/io.github.sshbrowse.sshbrowse.desktop"
         binary_tmp="$bin_dir/.{{.APP_NAME}}.tmp.$$"
         icon_tmp="$icons_dir/.{{.APP_NAME}}.png.tmp.$$"
-        desktop_tmp="$applications_dir/.io.github.osmocomet.sshbrowse.desktop.tmp.$$"
+        desktop_tmp="$applications_dir/.io.github.sshbrowse.sshbrowse.desktop.tmp.$$"
         cleanup() {
           rm -f -- "$binary_tmp" "$icon_tmp" "$desktop_tmp"
         }
@@ -258,7 +258,7 @@ tasks:
         fi
         rm -f -- \
           "$install_root/bin/{{.APP_NAME}}" \
-          "$install_root/share/applications/io.github.osmocomet.sshbrowse.desktop" \
+          "$install_root/share/applications/io.github.sshbrowse.sshbrowse.desktop" \
           "$install_root/share/icons/hicolor/256x256/apps/{{.APP_NAME}}.png"
     env:
       SSHBROWSE_INSTALL_ROOT: '{{.INSTALL_ROOT | default ""}}'
