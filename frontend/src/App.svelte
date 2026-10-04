@@ -29,6 +29,7 @@
     pageApplicationShortcutFor,
     shortcutLabel,
     terminalFontCommandFor,
+    terminalSearchShortcutFor,
     terminalFontEvent,
     type ApplicationShortcut,
     type TerminalFontCommand,
@@ -49,6 +50,8 @@
     aboutMenuEvent,
     checkForUpdatesMenuEvent,
     editMenuEvent,
+    findTerminalMenuEvent,
+    terminalSearchMenuEvent,
     isEditMenuAction,
     updateDownloadRequestEvent,
     updateInfoEvent,
@@ -94,6 +97,8 @@
   import { errorMessage } from "./lib/errors";
   import {
     loadPreferences,
+    normalizeTerminalScrollback,
+    terminalScrollbackDefault,
     preferenceKeys,
     savePreference,
     interfaceScaleDefault,
@@ -164,6 +169,9 @@
   let uiSize = $state<UiSize>("standard");
   let terminalFontSize = $state(14);
   let terminalFontName = $state<TerminalFontName>("system");
+  let terminalScrollbackLines = $state(terminalScrollbackDefault);
+  let terminalSearchRequest = $state(0);
+  let terminalSearchSessionId = $state<number | null>(null);
   let broadcastBarOpen = $state(false);
   let broadcastSending = $state(false);
   let broadcastConfirming = $state(false);
@@ -204,6 +212,7 @@
   const newLocalShortcut = shortcutLabel("⌘⇧T", "Ctrl+Shift+T", shortcutPlatform);
   const newSFTPShortcut = shortcutLabel("⌘⇧P", "Ctrl+Shift+P", shortcutPlatform);
   const closeTabShortcut = shortcutLabel("⌘W", "Ctrl+Shift+W", shortcutPlatform);
+  const findTerminalShortcut = shortcutLabel("⌘F", "Ctrl+Shift+F", shortcutPlatform);
   const sidebarShortcut = shortcutLabel("⌘B", "Ctrl+Shift+B", shortcutPlatform);
   const fontShortcuts = {
     increase: shortcutLabel("⌘+", "Ctrl++", shortcutPlatform),
@@ -473,6 +482,20 @@
   function setTerminalFontName(nextFont: TerminalFontName) {
     terminalFontName = nextFont;
     persistPreference(preferenceKeys.terminalFontName, nextFont);
+  }
+
+  function setTerminalScrollbackLines(nextLines: number) {
+    terminalScrollbackLines = normalizeTerminalScrollback(nextLines);
+    persistPreference(preferenceKeys.terminalScrollbackLines, String(terminalScrollbackLines));
+  }
+
+  function findInTerminal(sessionId = focusedSessionId(tabs, activeId)) {
+    if (modalDialogOpen() || sessionId === null || !sessions.some((session) => session.id === sessionId)) {
+      return;
+    }
+    selectSession(sessionId);
+    terminalSearchSessionId = sessionId;
+    terminalSearchRequest++;
   }
 
   function openSettings() {
@@ -894,7 +917,7 @@
       return;
     }
     const active = document.activeElement;
-    if (active instanceof Element && (active.closest(".pane") !== null || active.closest("#saved-connections") !== null)) {
+    if (active instanceof Element && (active.closest(".term") !== null || active.closest("#saved-connections") !== null)) {
       return;
     }
     handleFormEditAction(event.data);
@@ -1131,6 +1154,11 @@
   }
 
   function onKeydown(event: KeyboardEvent) {
+    if (terminalSearchShortcutFor(event, shortcutPlatform)) {
+      event.preventDefault();
+      findInTerminal();
+      return;
+    }
     const applicationShortcut = pageApplicationShortcutFor(event);
     if (applicationShortcut !== null) {
       event.preventDefault();
@@ -1277,6 +1305,7 @@
       uiSize = preferences.uiSize;
       terminalFontSize = preferences.terminalFontSize;
       terminalFontName = preferences.terminalFontName;
+      terminalScrollbackLines = preferences.terminalScrollbackLines;
       document.documentElement.dataset.theme = themeName;
       document.documentElement.dataset.terminalColors = terminalColors;
       document.documentElement.dataset.uiSize = uiSize;
@@ -1311,6 +1340,13 @@
     const offToggleSidebar = Events.On("menu:toggleSidebar", () => toggleSidebar());
     const offToggleTiling = Events.On("menu:toggleTiling", toggleTilingMode);
     const offEditMenu = Events.On(editMenuEvent, handleEditMenuAction);
+    const offFindTerminal = Events.On(findTerminalMenuEvent, () => findInTerminal());
+    const offTerminalSearch = Events.On(terminalSearchMenuEvent, (event: { data: unknown }) => {
+      const sessionId = Number(event.data);
+      if (Number.isSafeInteger(sessionId)) {
+        findInTerminal(sessionId);
+      }
+    });
     const offUpdateInfo = Events.On(updateInfoEvent, (event: { data: UpdateInfo }) => {
       updateInfo = event.data;
       if (!startupCheckScheduled && canCheckForUpdates(updateInfo.availability)) {
@@ -1420,6 +1456,8 @@
       offToggleSidebar();
       offToggleTiling();
       offEditMenu();
+      offFindTerminal();
+      offTerminalSearch();
       offUpdateInfo();
       offUpdateCheckResult();
       offUpdateStarted();
@@ -1454,6 +1492,7 @@
       {newSFTPShortcut}
       {newConnectionShortcut}
       {closeTabShortcut}
+      {findTerminalShortcut}
       {fontShortcuts}
       {minimiseShortcut}
       {quitShortcut}
@@ -1465,6 +1504,7 @@
       onclosetab={handleMenuCloseTab}
       onfont={onTerminalFontCommand}
       oneditaction={emitEditMenuAction}
+      onfindterminal={() => findInTerminal()}
       onsettings={openSettings}
       settingsActive={settingsOpen}
       onabout={emitAboutMenuAction}
@@ -1726,6 +1766,13 @@
               {terminalColors}
               {terminalFontName}
               defaultFontSize={terminalFontSize}
+              scrollbackLines={terminalScrollbackLines}
+              searchRequest={terminalSearchSessionId === session.id ? terminalSearchRequest : 0}
+              onsearchopen={() => {
+                if (liveBroadcast !== null) {
+                  stopLiveBroadcast("Live broadcast stopped because terminal search opened.");
+                }
+              }}
               onstatus={(status) => (session.status = status)}
               onprocesschange={(processInstanceId) => (session.processInstanceId = processInstanceId)}
               oninput={routeTerminalInput}
@@ -1772,6 +1819,7 @@
       {interfaceScale}
       {terminalFontSize}
       {terminalFontName}
+      {terminalScrollbackLines}
       {rightClickToPaste}
       {copyOnSelection}
       {sidebarWidth}
@@ -1794,6 +1842,7 @@
       oninterfacescalechange={setInterfaceScale}
       onterminalfontsizechange={setTerminalFontSize}
       onterminalfontchange={setTerminalFontName}
+      onterminalscrollbackchange={setTerminalScrollbackLines}
       onrightclickpastechange={setRightClickToPaste}
       oncopyselectionchange={setCopyOnSelection}
       onclose={closeSettings}

@@ -64,6 +64,17 @@ export type ApplicationShortcut =
 
 export const terminalFontEvent = "sshbrowse:terminal-font";
 
+export function terminalSearchShortcutFor(
+  event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
+  platform: ShortcutPlatform = currentPlatform(),
+): boolean {
+  if (!usesPrimaryModifier(event, platform) || event.key.toLowerCase() !== "f") {
+    return false;
+  }
+  // Ctrl+F remains available to shells and terminal applications.
+  return platform === "mac" ? !event.shiftKey : event.shiftKey;
+}
+
 export function terminalFontCommandFor(
   event: KeyboardEvent,
   platform: ShortcutPlatform = currentPlatform(),

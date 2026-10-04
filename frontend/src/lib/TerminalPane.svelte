@@ -1,13 +1,38 @@
 <script module lang="ts">
+  import { Terminal } from "@xterm/xterm";
+  import { SearchSelectionCopyGuard } from "./terminalSearch";
+
+  class SearchableTerminal extends Terminal {
+    readonly searchSelectionCopy = new SearchSelectionCopyGuard();
+
+    override select(column: number, row: number, length: number) {
+      // xterm fires selection changes synchronously. The addon also selects
+      // during delayed output refreshes, which a guard around findNext misses.
+      // Mouse selection and selectAll do not use this programmatic select API.
+      if (!this.searchSelectionCopy.preservingSelection) {
+        this.searchSelectionCopy.run(() => super.select(column, row, length));
+      }
+    }
+
+    override clearSelection() {
+      if (!this.searchSelectionCopy.preservingSelection) {
+        super.clearSelection();
+      }
+    }
+  }
+
   // Process-instance ids are chosen here, before Go starts the process, so this
   // pane is already listening when the first output event arrives. Unique per app run.
   let nextProcessInstanceId = 1;
 </script>
 
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { Terminal } from "@xterm/xterm";
+  import { onMount, tick } from "svelte";
   import { FitAddon } from "@xterm/addon-fit";
+  import type { ISearchResultChangeEvent } from "@xterm/addon-search";
+  import ChevronDown from "@lucide/svelte/icons/chevron-down";
+  import ChevronUp from "@lucide/svelte/icons/chevron-up";
+  import X from "@lucide/svelte/icons/x";
   import "@xterm/xterm/css/xterm.css";
   import { Clipboard, Events } from "@wailsio/runtime";
   import * as Sessions from "../../bindings/sshbrowse/internal/app/sessions";
@@ -21,6 +46,7 @@
     type TerminalFontCommand,
     type TerminalFontEventDetail,
     tabCommandFor,
+    terminalSearchShortcutFor,
   } from "./shortcuts";
   import {
     editMenuEvent,
@@ -49,6 +75,13 @@
     pasteClipboardForBroadcastGeneration,
     type LiveBroadcastPasteState,
   } from "./liveBroadcast";
+  import { normalizeTerminalScrollback } from "./storage";
+  import {
+    terminalSearchCommandFor,
+    TerminalSearchSession,
+    terminalSearchQueryLimit,
+    terminalSearchResultLabel,
+  } from "./terminalSearch";
 
   const fileDropEvent = "window:filesDropped";
 
@@ -60,6 +93,7 @@
     selected,
     autofocus,
     focusRequest,
+    searchRequest = 0,
     shortcutsEnabled,
     themeName,
     terminalColors,
@@ -67,6 +101,7 @@
     defaultFontSize,
     rightClickToPaste,
     copyOnSelection,
+    scrollbackLines = 1000,
     onstatus,
     onprocesschange,
     oninput,
@@ -79,6 +114,7 @@
     onpastewarningschange,
     onfocus,
     onclose,
+    onsearchopen = () => {},
   }: {
     sessionId: number;
     sessionLabel: string;
@@ -87,6 +123,7 @@
     selected: boolean;
     autofocus: boolean;
     focusRequest: number;
+    searchRequest?: number;
     shortcutsEnabled: boolean;
     themeName: ThemeName;
     terminalColors: TerminalColors;
@@ -94,6 +131,7 @@
     defaultFontSize: number;
     rightClickToPaste: boolean;
     copyOnSelection: boolean;
+    scrollbackLines?: number;
     onstatus: (status: SessionStatus) => void;
     onprocesschange: (processInstanceId: number | null) => void;
     oninput: (event: TerminalInputEvent) => void;
@@ -111,14 +149,23 @@
     onpastewarningschange: (disabled: boolean) => void;
     onfocus: () => void;
     onclose: () => void;
+    onsearchopen?: () => void;
   } = $props();
 
   // Name of the program in status messages.
   let programName = $derived(connection === null ? "shell" : command);
 
   let container: HTMLDivElement;
-  let terminal: Terminal;
+  let terminal: SearchableTerminal;
   let fit: FitAddon;
+  let search: TerminalSearchSession | undefined;
+  let searchInput = $state<HTMLInputElement | undefined>(undefined);
+  let searchOpen = $state(false);
+  let searchQuery = $state("");
+  let searchCaseSensitive = $state(false);
+  let searchError = $state("");
+  let searchResult = $state<ISearchResultChangeEvent>({ resultIndex: -1, resultCount: 0 });
+  let searchResultLabel = $derived(terminalSearchResultLabel(searchQuery, searchResult));
   let processInstanceId = $state<number | null>(null);
   let disposed = false;
   let status = $state<SessionStatus>("connecting");
@@ -133,6 +180,7 @@
   let mounted = $state(false);
   let wasSelected = false;
   let observedFocusRequest = 0;
+  let observedSearchRequest = 0;
   let dropTargetId = $derived(processInstanceId === null ? undefined : `terminal-drop-${processInstanceId}`);
   let dropError = $state("");
   let pasteError = $state("");
@@ -147,6 +195,97 @@
 
   function clampFontSize(size: number): number {
     return Math.min(Math.max(size, 8), 32);
+  }
+
+  async function focusSearch(selectQuery = false) {
+    await tick();
+    if (disposed || !selected || !shortcutsEnabled || !searchOpen) {
+      return;
+    }
+    searchInput?.focus();
+    if (selectQuery) {
+      searchInput?.select();
+    }
+  }
+
+  function createSearchSession() {
+    search = new TerminalSearchSession(terminal, terminal.searchSelectionCopy, {
+      isQueryFocused: () => document.activeElement === searchInput,
+      onResults: (result) => {
+        if (!disposed && searchOpen) {
+          searchResult = result;
+        }
+      },
+      onError: (message) => {
+        if (!disposed && searchOpen) {
+          searchError = message;
+        }
+      },
+    });
+  }
+
+  function openSearch() {
+    onsearchopen();
+    searchOpen = true;
+    if (search === undefined) {
+      createSearchSession();
+    }
+    findSearchMatch("next", true);
+    void focusSearch(true);
+  }
+
+  function closeSearch() {
+    searchOpen = false;
+    // Disposal also cancels pending output refreshes before ordinary selection resumes.
+    search?.dispose();
+    search = undefined;
+    terminal.clearSelection();
+    searchResult = { resultIndex: -1, resultCount: 0 };
+    searchError = "";
+    if (selected && shortcutsEnabled) {
+      terminal.focus();
+    }
+  }
+
+  function findSearchMatch(direction: "next" | "previous", incremental = false) {
+    if (search === undefined) {
+      return;
+    }
+    search.find(searchQuery, searchCaseSensitive, direction, incremental);
+  }
+
+  function updateSearch() {
+    findSearchMatch("next", true);
+  }
+
+  function handleSearchInput(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    // Edit-menu paste uses setRangeText, which bypasses the browser's maxlength.
+    const query = input.value.slice(0, terminalSearchQueryLimit);
+    if (input.value !== query) {
+      input.value = query;
+    }
+    searchQuery = query;
+    updateSearch();
+  }
+
+  function navigateSearch(direction: "next" | "previous") {
+    findSearchMatch(direction);
+    void focusSearch();
+  }
+
+  function handleSearchKeydown(event: KeyboardEvent) {
+    const command = terminalSearchCommandFor(event);
+    if (command === null || (command !== "close" && event.target !== searchInput)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (command === "close") {
+      closeSearch();
+    } else {
+      navigateSearch(command);
+    }
   }
 
   function copyTerminalSelection() {
@@ -436,7 +575,7 @@
     setStatus("live");
     // A fit while Open was pending was not sent to the new process.
     requestResize(terminal.cols, terminal.rows);
-    if (focusWhenReady && selected) {
+    if (focusWhenReady && selected && !searchOpen) {
       terminal.focus();
     }
   }
@@ -486,13 +625,16 @@
   onMount(() => {
     fontSize = clampFontSize(defaultFontSize);
     appliedFontName = terminalFontName;
-    terminal = new Terminal({
+    terminal = new SearchableTerminal({
       fontFamily: terminalFontFamilyFor(terminalFontName),
       fontSize,
       cursorBlink: true,
       macOptionIsMeta: true,
       theme: terminalThemeFor(themeName, terminalColors),
       minimumContrastRatio: terminalMinimumContrastRatio(themeName, terminalColors),
+      scrollback: normalizeTerminalScrollback(scrollbackLines),
+      // The official search addon uses xterm's proposed decoration API.
+      allowProposedApi: true,
     });
     fit = new FitAddon();
     terminal.loadAddon(fit);
@@ -521,6 +663,10 @@
         return false;
       }
       if (tabCommandFor(event) !== null) {
+        return false;
+      }
+      if (terminalSearchShortcutFor(event)) {
+        event.preventDefault();
         return false;
       }
       if (!handleShiftEnter(event, (input) => terminal.input(input))) {
@@ -646,7 +792,7 @@
       }
     });
     terminal.onSelectionChange(() => {
-      if (copyOnSelection) {
+      if (copyOnSelection && !terminal.searchSelectionCopy.active) {
         copyTerminalSelection();
       }
     });
@@ -670,6 +816,8 @@
       offEditMenu();
       offTerminalCopy();
       offTerminalPaste();
+      search?.dispose();
+      search = undefined;
       container.removeEventListener("paste", interceptTerminalPaste, true);
       if (pendingFitFrame !== null) {
         cancelAnimationFrame(pendingFitFrame);
@@ -693,10 +841,35 @@
     const focusWasRequested = focusRequest !== observedFocusRequest;
     if (mounted && selected && (!wasSelected || focusWasRequested)) {
       fit.fit();
-      terminal.focus();
+      if (searchOpen) {
+        void focusSearch();
+      } else {
+        terminal.focus();
+      }
     }
     wasSelected = selected;
     observedFocusRequest = focusRequest;
+  });
+
+  $effect(() => {
+    const request = searchRequest;
+    if (!mounted) {
+      return;
+    }
+    if (request > 0 && request !== observedSearchRequest && selected && shortcutsEnabled) {
+      openSearch();
+    }
+    observedSearchRequest = request;
+  });
+
+  $effect(() => {
+    const scrollback = normalizeTerminalScrollback(scrollbackLines);
+    if (!mounted || terminal.options.scrollback === scrollback) {
+      return;
+    }
+    terminal.options.scrollback = scrollback;
+    // This trim does not emit xterm's public write or resize events.
+    search?.invalidate();
   });
 
   $effect(() => {
@@ -741,6 +914,27 @@
     style:--custom-contextmenu-data={sessionId}
     oncontextmenu={handleTerminalContextMenu}
   ></div>
+  {#if searchOpen}
+    <form class="terminal-search" role="search" aria-label="Search terminal output" onsubmit={(event) => event.preventDefault()}>
+      <input
+        bind:this={searchInput}
+        bind:value={searchQuery}
+        aria-label="Find in terminal"
+        placeholder="Find in terminal"
+        maxlength={terminalSearchQueryLimit}
+        autocomplete="off"
+        spellcheck="false"
+        onkeydown={handleSearchKeydown}
+        oninput={handleSearchInput}
+        onblur={() => search?.clearActiveDecoration()}
+      />
+      <span class="search-results" role="status" aria-live="polite">{searchError || searchResultLabel}</span>
+      <button type="button" class:active={searchCaseSensitive} aria-label="Match case" aria-pressed={searchCaseSensitive} title="Match case" onkeydown={handleSearchKeydown} onclick={() => { searchCaseSensitive = !searchCaseSensitive; updateSearch(); }}>Aa</button>
+      <button type="button" aria-label="Previous match" title="Previous match (Shift+Enter)" disabled={!searchQuery || searchResult.resultCount === 0} onkeydown={handleSearchKeydown} onclick={() => navigateSearch("previous")}><ChevronUp size={15} /></button>
+      <button type="button" aria-label="Next match" title="Next match (Enter)" disabled={!searchQuery || searchResult.resultCount === 0} onkeydown={handleSearchKeydown} onclick={() => navigateSearch("next")}><ChevronDown size={15} /></button>
+      <button type="button" aria-label="Close search" title="Close search (Escape)" onkeydown={handleSearchKeydown} onclick={closeSearch}><X size={15} /></button>
+    </form>
+  {/if}
   {#if dropError}
     <div class="banner" role="alert">
       <span>{dropError}</span>
@@ -798,6 +992,70 @@
   }
   .term :global(.xterm-viewport) {
     background: var(--terminal-background);
+  }
+  .terminal-search {
+    position: absolute;
+    z-index: 3;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    max-width: calc(100% - 16px);
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    font: var(--ui-font-small) var(--font-ui);
+    box-shadow: var(--shadow-panel);
+  }
+  .terminal-search input {
+    flex: 1;
+    min-width: 60px;
+    width: 160px;
+    height: 28px;
+    padding: 0 7px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--input-surface);
+    color: var(--text-primary);
+    font: inherit;
+  }
+  .search-results {
+    min-width: 72px;
+    padding: 0 3px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+  .terminal-search button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+  }
+  .terminal-search button:hover:not(:disabled) {
+    background: var(--control-hover);
+    color: var(--text-primary);
+  }
+  .terminal-search button.active {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .terminal-search button:disabled {
+    opacity: 0.4;
+  }
+  .terminal-search input:focus,
+  .terminal-search button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
   .banner {
     position: absolute;

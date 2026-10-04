@@ -7,6 +7,7 @@ import {
   shortcutLabel,
   tabCommandFor,
   terminalFontCommandFor,
+  terminalSearchShortcutFor,
   usesPrimaryModifier,
   windowsShortcutFor,
 } from "../src/lib/shortcuts.ts";
@@ -33,6 +34,18 @@ test("Linux uses Ctrl for page shortcuts and rejects the macOS modifier", () => 
   );
   assert.equal(tabCommandFor(keyboardEvent({ key: "1", metaKey: true }), "linux"), null);
   assert.equal(tabCommandFor(keyboardEvent({ key: "1", ctrlKey: true, metaKey: true }), "linux"), null);
+});
+
+test("terminal search uses Command+F on macOS and Ctrl+Shift+F elsewhere", () => {
+  assert.equal(terminalSearchShortcutFor(keyboardEvent({ key: "f", metaKey: true }), "mac"), true);
+  assert.equal(terminalSearchShortcutFor(keyboardEvent({ key: "f", metaKey: true, shiftKey: true }), "mac"), false);
+  for (const platform of ["linux", "windows"] as const) {
+    assert.equal(terminalSearchShortcutFor(keyboardEvent({ key: "F", ctrlKey: true, shiftKey: true }), platform), true);
+    assert.equal(terminalSearchShortcutFor(keyboardEvent({ key: "f", ctrlKey: true }), platform), false);
+    assert.equal(terminalSearchShortcutFor(keyboardEvent({ key: "f", ctrlKey: true, shiftKey: true, altKey: true }), platform), false);
+    assert.equal(terminalSearchShortcutFor(keyboardEvent({ key: "f", metaKey: true }), platform), false);
+  }
+  assert.equal(terminalSearchShortcutFor(keyboardEvent({ key: "f", ctrlKey: true }), "mac"), false);
 });
 
 test("macOS keeps Command tab shortcuts and does not claim Ctrl input", () => {
