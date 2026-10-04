@@ -155,6 +155,8 @@
   let closeConfirmationDialog = $state<{ dismiss: () => void }>();
   let closeConfirmation = $state<CloseConfirmationRequest | null>(null);
   let settingsOpen = $state(false);
+  let backupBusy = $state(false);
+  let preferenceRevision = $state(0);
   let scanningImport = $state(false);
   let copiedConnection = $state<Connection | null>(null);
   // When the form was opened to bookmark an unsaved session, that session adopts the result.
@@ -514,6 +516,9 @@
   }
 
   function closeSettings() {
+    if (backupBusy) {
+      return;
+    }
     settingsOpen = false;
     closeDialog(true);
   }
@@ -1290,7 +1295,7 @@
     }
   }
 
-  onMount(() => {
+  function reloadPreferences() {
     try {
       const preferences = loadPreferences(localStorage);
       sidebarWidth = preferences.sidebarWidth;
@@ -1315,6 +1320,19 @@
     }
 
     updateWindowsChrome(themeName);
+  }
+
+  async function completeBackupImport(preferencesChanged: boolean) {
+    if (preferencesChanged) {
+      reloadPreferences();
+      preferenceRevision++;
+    }
+    copiedConnection = null;
+    await loadConnections();
+  }
+
+  onMount(() => {
+    reloadPreferences();
 
     loadConnections()
       .then(() => openSSHConfigImport(true))
@@ -1513,6 +1531,7 @@
       onminimise={minimiseApplicationWindow}
     />
   {/if}
+  {#key preferenceRevision}
   <Sidebar
     visible={sidebarVisible}
     width={sidebarWidth}
@@ -1540,6 +1559,7 @@
     onresize={resizeSidebar}
     onresizeend={finishSidebarResize}
   />
+  {/key}
   <div class="main" inert={settingsOpen} aria-hidden={settingsOpen}>
     {#if linuxWindowChrome}
       <div class="linux-session-toolbar">
@@ -1813,6 +1833,10 @@
   </div>
   {#if settingsOpen}
     <SettingsPage
+      sessionsOpen={sessions.length > 0}
+      {backupBusy}
+      onbackupcomplete={completeBackupImport}
+      onbackupbusychange={(busy) => { backupBusy = busy; }}
       {themeName}
       {terminalColors}
       {uiSize}
