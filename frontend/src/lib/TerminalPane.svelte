@@ -203,6 +203,7 @@
       return;
     }
     searchInput?.focus();
+    search?.refresh();
     if (selectQuery) {
       searchInput?.select();
     }
@@ -210,7 +211,8 @@
 
   function createSearchSession() {
     search = new TerminalSearchSession(terminal, terminal.searchSelectionCopy, {
-      isQueryFocused: () => document.activeElement === searchInput,
+      isQueryFocused: () => selected && shortcutsEnabled && document.hasFocus()
+        && document.activeElement === searchInput,
       onResults: (result) => {
         if (!disposed && searchOpen) {
           searchResult = result;
@@ -229,8 +231,10 @@
     searchOpen = true;
     if (search === undefined) {
       createSearchSession();
+      findSearchMatch("next", true);
+    } else if (searchError) {
+      findSearchMatch("next", true);
     }
-    findSearchMatch("next", true);
     void focusSearch(true);
   }
 
@@ -700,6 +704,9 @@
       }
     };
     window.addEventListener(terminalFontEvent, onTerminalFontCommand);
+    // The active element survives window blur, so refocus may not fire on the input.
+    const onWindowFocus = () => search?.refresh();
+    window.addEventListener("focus", onWindowFocus);
 
     const offEditMenu = Events.On(editMenuEvent, (event: { data: unknown }) => {
       if (isEditMenuAction(event.data)) {
@@ -813,6 +820,7 @@
       offExit();
       offFileDrop();
       window.removeEventListener(terminalFontEvent, onTerminalFontCommand);
+      window.removeEventListener("focus", onWindowFocus);
       offEditMenu();
       offTerminalCopy();
       offTerminalPaste();
@@ -926,6 +934,7 @@
         spellcheck="false"
         onkeydown={handleSearchKeydown}
         oninput={handleSearchInput}
+        onfocus={() => search?.refresh()}
         onblur={() => search?.clearActiveDecoration()}
       />
       <span class="search-results" role="status" aria-live="polite">{searchError || searchResultLabel}</span>

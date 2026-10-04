@@ -66,6 +66,7 @@ function searchTerminal(options: ITerminalOptions = {}) {
     results,
     errors,
     blurQuery() { queryFocused = false; },
+    focusQuery() { queryFocused = true; session.refresh(); },
     write(text: string) { return new Promise<void>((resolve) => terminal.write(text, resolve)); },
     dispose() { session.dispose(); terminal.dispose(); },
   };
@@ -161,7 +162,7 @@ test("actual addon refresh sees an overwritten line even when the cursor ends in
   }
 });
 
-test("automatic refresh preserves a manual selection and the viewport at execution time", async () => {
+test("unfocused search pauses refreshes and catches up on focus without moving the viewport", async () => {
   const search = searchTerminal({ rows: 3 });
   try {
     await search.write("needle\r\nmanual\r\n" + "other\r\n".repeat(10));
@@ -176,8 +177,47 @@ test("automatic refresh preserves a manual selection and the viewport at executi
     assert.equal(search.terminal.buffer.active.viewportY, 3);
     assert.deepEqual(search.terminal.getSelectionPosition(), selection);
     assert.equal(search.terminal.getSelection(), "manual");
+    assert.equal(search.results.at(-1)?.resultCount, 1, "background output does not rescan history");
+    search.focusQuery();
+    assert.equal(search.terminal.buffer.active.viewportY, 3);
     assert.equal(search.results.at(-1)?.resultCount, 2);
-    assert.equal(search.results.at(-1)?.resultIndex, -1);
+  } finally {
+    search.dispose();
+  }
+});
+
+test("refocusing clean search results preserves the match and leaves Next available", async () => {
+  const search = searchTerminal();
+  try {
+    await search.write("foo foo foo");
+    search.session.find("foo", false, "next", true);
+    const selection = search.terminal.getSelectionPosition();
+    const resultCount = search.results.length;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      search.blurQuery();
+      search.focusQuery();
+      assert.deepEqual(search.terminal.getSelectionPosition(), selection);
+    }
+    assert.equal(search.results.length, resultCount, "clean results do not need another scan");
+    search.session.find("foo", false, "next");
+    assert.equal(search.terminal.getSelectionPosition()?.start.x, 4);
+  } finally {
+    search.dispose();
+  }
+});
+
+test("refocusing dirty results refreshes the count without advancing an unchanged match", async () => {
+  const search = searchTerminal();
+  try {
+    await search.write("foo foo");
+    search.session.find("foo", false, "next", true);
+    search.session.find("foo", false, "next");
+    const selection = search.terminal.getSelectionPosition();
+    search.blurQuery();
+    await search.write(" foo");
+    search.focusQuery();
+    assert.deepEqual(search.terminal.getSelectionPosition(), selection);
+    assert.equal(search.results.at(-1)?.resultCount, 3);
   } finally {
     search.dispose();
   }
@@ -327,13 +367,54 @@ test("invalidations share one refresh deadline instead of postponing it", async 
     search.session.find("foo", false, "next", true);
     const initialResults = search.results.length;
     search.session.invalidate();
-    context.mock.timers.tick(80);
+    context.mock.timers.tick(terminalSearchRefreshDelay / 4);
     search.session.invalidate();
-    context.mock.timers.tick(80);
+    context.mock.timers.tick(terminalSearchRefreshDelay / 4);
     search.session.invalidate();
-    context.mock.timers.tick(40);
+    context.mock.timers.tick(terminalSearchRefreshDelay / 2);
     assert.equal(search.results.length, initialResults + 1);
-    context.mock.timers.tick(200);
+    context.mock.timers.tick(terminalSearchRefreshDelay);
+    assert.equal(search.results.length, initialResults + 1);
+  } finally {
+    search.dispose();
+  }
+});
+
+test("continuous output limits focused refreshes to one scan per second", async (context) => {
+  const search = searchTerminal();
+  try {
+    await search.write("foo");
+    search.session.find("foo", false, "next", true);
+    const initialResults = search.results.length;
+    context.mock.timers.enable({ apis: ["setTimeout"] });
+    for (let elapsed = 0; elapsed < 3000; elapsed += 20) {
+      search.session.invalidate();
+      context.mock.timers.tick(20);
+      assert.equal(search.results.length - initialResults, Math.floor((elapsed + 20) / 1000));
+    }
+  } finally {
+    search.dispose();
+  }
+});
+
+test("a pending refresh does no work after search loses focus", async (context) => {
+  const search = searchTerminal();
+  try {
+    await search.write("foo");
+    search.session.find("foo", false, "next", true);
+    const initialResults = search.results.length;
+    context.mock.timers.enable({ apis: ["setTimeout"] });
+    search.session.invalidate();
+    search.blurQuery();
+    context.mock.timers.tick(terminalSearchRefreshDelay);
+    for (let update = 0; update < 5; update++) {
+      search.session.invalidate();
+      context.mock.timers.tick(terminalSearchRefreshDelay);
+    }
+    assert.equal(search.results.length, initialResults);
+    search.focusQuery();
+    assert.equal(search.results.length, initialResults + 1);
+    context.mock.timers.tick(terminalSearchRefreshDelay);
     assert.equal(search.results.length, initialResults + 1);
   } finally {
     search.dispose();

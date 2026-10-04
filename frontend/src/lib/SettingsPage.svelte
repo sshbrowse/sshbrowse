@@ -292,7 +292,7 @@
                 <div class="setting-row">
                   <div>
                     <label for="terminal-scrollback-lines"><strong>Scrollback lines</strong></label>
-                    <span id="scrollback-description">Lines retained above the visible terminal. 0 disables history; maximum 50,000.</span>
+                    <span id="scrollback-description">Applies to all open and future terminals. Lines retained above the visible terminal. 0 disables history; maximum 50,000.</span>
                   </div>
                   <form class="scrollback-control" onsubmit={applyScrollback}>
                     <input
@@ -317,7 +317,7 @@
                   <button class="switch" type="button" role="switch" aria-label="Right-click to paste" aria-checked={rightClickToPaste} onclick={() => onrightclickpastechange(!rightClickToPaste)}><span></span></button>
                 </div>
               </div>
-              <p id="scrollback-warning" class="hint">Lowering this limit removes the oldest retained lines. Removed output cannot be recovered.</p>
+              <p id="scrollback-warning" class="hint">Lowering this limit removes the oldest retained lines in every open terminal. Removed output cannot be recovered.</p>
             </section>
           {/if}
         </div>

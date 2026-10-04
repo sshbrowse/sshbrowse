@@ -3,7 +3,8 @@ import type { IBuffer, IDisposable, Terminal } from "@xterm/xterm";
 
 export const terminalSearchHighlightLimit = 1000;
 export const terminalSearchQueryLimit = 1024;
-export const terminalSearchRefreshDelay = 200;
+// Full-buffer scans are synchronous; limit automatic rebuilds to once a second.
+export const terminalSearchRefreshDelay = 1000;
 const terminalSearchWrappedLineLimit = 256;
 const terminalSearchScannedCellLimit = 8 * 1024 * 1024;
 
@@ -209,31 +210,34 @@ export class TerminalSearchSession {
     this.bufferSafetyKnown = false;
     this.addon?.dispose();
     this.addon = undefined;
-    if (this.query === "" || this.failure === "addon" || this.refreshTimer !== undefined) {
+    if (this.query === "" || this.failure === "addon" || this.refreshTimer !== undefined
+      || !this.callbacks.isQueryFocused()) {
       return;
     }
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = undefined;
-      if (this.disposed) {
-        return;
-      }
-      // Capture the viewport when refreshing, after any intervening user scroll.
-      const viewport = this.terminal.buffer.active.viewportY;
-      const queryFocused = this.callbacks.isQueryFocused();
-      try {
-        if (queryFocused) {
-          this.findMatch("next", true);
-        } else {
-          this.selectionGuard.preserveSelection(() => this.findMatch("next", true));
-          this.clearActiveDecoration();
-        }
-      } finally {
-        this.terminal.scrollToLine(viewport);
-      }
+      this.refresh();
     }, terminalSearchRefreshDelay);
   }
 
+  refresh(): void {
+    if (this.disposed || !this.dirty || this.query === "" || this.failure === "addon"
+      || !this.callbacks.isQueryFocused()) {
+      return;
+    }
+    this.cancelRefresh();
+    // Capture the viewport after any intervening user scroll. A fresh addon
+    // starts from the current selection, so a refresh does not advance a match.
+    const viewport = this.terminal.buffer.active.viewportY;
+    try {
+      this.findMatch("next", true);
+    } finally {
+      this.terminal.scrollToLine(viewport);
+    }
+  }
+
   clearActiveDecoration(): void {
+    this.cancelRefresh();
     this.addon?.clearActiveDecoration();
     this.result = { ...this.result, resultIndex: -1 };
     this.callbacks.onResults(this.result);
