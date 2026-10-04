@@ -31,7 +31,7 @@ func TestSupportsUpdaterRequiresStableReleaseVersion(t *testing.T) {
 
 func TestSupportsUpdaterPlatformAndArchitecture(t *testing.T) {
 	if supportsUpdaterFor("linux", "amd64", "/opt/sshbrowse", "0.1.0") {
-		t.Fatal("Linux self-update must remain disabled")
+		t.Fatal("Arbitrary Linux install paths must not support in-app updates")
 	}
 	if supportsUpdaterFor("darwin", "386", "/Applications/sshbrowse.app/Contents/MacOS/sshbrowse", "0.1.0") {
 		t.Fatal("unsupported macOS architectures must not support updates")

@@ -40,7 +40,7 @@ func updateInfoFor(platform, arch, executablePath, version string, initErr error
 		info.Message = "In-app updates are unavailable for development builds."
 	case platform == "linux" && !supportsUpdaterFor(platform, arch, executablePath, version):
 		info.Availability = "package-manager"
-		info.Message = "Updates for DEB and RPM installations are handled by your package manager."
+		info.Message = "In-app updates are available for Linux x86-64 per-user installs at ~/.local/bin/sshbrowse. DEB/RPM installations should be updated through your package manager."
 	case !supportsUpdaterFor(platform, arch, executablePath, version):
 		info.Availability = "unsupported"
 		info.Message = "In-app updates are unavailable for this installation."
