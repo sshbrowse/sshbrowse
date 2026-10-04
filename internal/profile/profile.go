@@ -42,7 +42,15 @@ type Connection struct {
 	LocalForwards    []string    `json:"localForwards"`   // ssh -L specs, e.g. "8080:localhost:80"
 	RemoteForwards   []string    `json:"remoteForwards"`  // ssh -R specs
 	DynamicForwards  []string    `json:"dynamicForwards"` // ssh -D specs, e.g. "1080"
+	LogOutput        bool        `json:"logOutput,omitempty"`
 	Provenance       *Provenance `json:"provenance,omitempty"`
+}
+
+// SessionLoggingSettings stores the user's transcript destination and limits.
+type SessionLoggingSettings struct {
+	Directory          string `json:"directory"`
+	MaxFileSizeMB      int    `json:"maxFileSizeMB"`
+	MaxRecordingSizeMB int    `json:"maxRecordingSizeMB"`
 }
 
 // Provenance marks a connection imported from ssh_config, so a rescan does not
@@ -56,10 +64,11 @@ type OnboardingState struct {
 }
 
 type fileFormat struct {
-	Version     int             `json:"version"`
-	Connections []Connection    `json:"connections"`
-	Folders     []string        `json:"folders"`
-	Onboarding  OnboardingState `json:"onboarding,omitempty"`
+	Version         int                     `json:"version"`
+	Connections     []Connection            `json:"connections"`
+	Folders         []string                `json:"folders"`
+	Onboarding      OnboardingState         `json:"onboarding,omitempty"`
+	LoggingSettings *SessionLoggingSettings `json:"loggingSettings,omitempty"`
 }
 
 // Store reads and writes the connections file. The file is re-read on every
@@ -498,6 +507,42 @@ func (s *Store) AnswerSSHConfigImport() error {
 		return nil
 	}
 	file.Onboarding.SSHConfigImportAnswered = true
+	return s.write(file)
+}
+
+// LoggingSettings returns the saved logging settings, or nil when this file
+// predates session logging.
+func (s *Store) LoggingSettings() (*SessionLoggingSettings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	lockFile, err := acquireFileLock(s.path)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseFileLock(lockFile)
+	file, err := s.load()
+	if err != nil || file.LoggingSettings == nil {
+		return nil, err
+	}
+	settings := *file.LoggingSettings
+	return &settings, nil
+}
+
+// SaveLoggingSettings updates the optional settings without changing saved
+// connections. The app validates and normalizes the values before this call.
+func (s *Store) SaveLoggingSettings(settings SessionLoggingSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	lockFile, err := acquireFileLock(s.path)
+	if err != nil {
+		return err
+	}
+	defer releaseFileLock(lockFile)
+	file, err := s.load()
+	if err != nil {
+		return err
+	}
+	file.LoggingSettings = &settings
 	return s.write(file)
 }
 

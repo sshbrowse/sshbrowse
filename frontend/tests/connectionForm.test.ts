@@ -5,7 +5,7 @@ import { connectionDialogBounds, connectionFormSections, forwardingSummary, port
 
 const basic: Connection = {
   id: "", name: "", folder: "", host: "example.invalid", user: "", port: 0,
-  identityFile: "", jumpHost: "", agentForwarding: false, x11Forwarding: false,
+  identityFile: "", jumpHost: "", agentForwarding: false, x11Forwarding: false, logOutput: false,
   localForwards: [], remoteForwards: [], dynamicForwards: [], provenance: null,
 };
 

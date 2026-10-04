@@ -6,6 +6,7 @@
   import type { TerminalColors, TerminalFontName, ThemeName } from "./appearance";
   import type { UpdateInfo } from "./menuEvents";
   import { terminalScrollbackMinimum, terminalScrollbackMaximum, type UiSize } from "./storage";
+  import type { LoggingSettings } from "../../bindings/sshbrowse/internal/app/models";
   import { canCheckForUpdates } from "./updates";
 
   let {
@@ -27,6 +28,15 @@
     updateReady,
     checkUpdatesOnStartup,
     updateReleaseURL,
+    loggingSettings = null,
+    loggingSettingsLoading = false,
+    loggingSettingsReady = true,
+    loggingSettingsBusy = false,
+    loggingSettingsStatus = "",
+    loggingSettingsError = "",
+    onreloadloggingsettings = () => {},
+    onchooseloggingdirectory = async () => "",
+    onloggingsave = async () => {},
     onstartupupdatechange,
     onreleasenotes,
     oncheckforupdates,
@@ -61,6 +71,15 @@
     updateReady: boolean;
     checkUpdatesOnStartup: boolean;
     updateReleaseURL: string;
+    loggingSettings?: LoggingSettings | null;
+    loggingSettingsLoading?: boolean;
+    loggingSettingsReady?: boolean;
+    loggingSettingsBusy?: boolean;
+    loggingSettingsStatus?: string;
+    loggingSettingsError?: string;
+    onreloadloggingsettings?: () => void;
+    onchooseloggingdirectory?: () => Promise<string>;
+    onloggingsave?: (settings: LoggingSettings) => Promise<void>;
     onstartupupdatechange: (enabled: boolean) => void;
     onreleasenotes: () => void;
     oncheckforupdates: () => void;
@@ -87,16 +106,28 @@
     { name: "contrast", label: "High Contrast", description: "Clear edges · bright text" },
   ];
 
-  type Section = "general" | "appearance" | "terminal";
+  type Section = "general" | "appearance" | "terminal" | "logging";
   const sectionLabels: Record<Section, string> = {
     general: "General",
     appearance: "Appearance",
     terminal: "Terminal",
+    logging: "Logging",
   };
-  const sections: Section[] = ["general", "appearance", "terminal"];
+  const sections: Section[] = ["general", "appearance", "terminal", "logging"];
   let selectedSection = $state<Section>("general");
   let pageHeading: HTMLHeadingElement;
   let pageContent: HTMLElement;
+  let loggingDraft = $state<LoggingSettings>({ directory: "", maxFileSizeMB: 10, maxRecordingSizeMB: 100 });
+  let choosingLoggingDirectory = $state(false);
+  let observedLoggingSettings: LoggingSettings | null = null;
+
+  $effect(() => {
+    if (loggingSettings !== null && !loggingSettingsLoading && loggingSettings !== observedLoggingSettings) {
+      observedLoggingSettings = loggingSettings;
+      loggingDraft = { ...loggingSettings };
+    }
+  });
+
   // Apply explicitly: lowering the live limit discards retained terminal output.
   let scrollbackDraft = $state<number | undefined>(undefined);
 
@@ -118,6 +149,35 @@
   function selectSection(section: Section) {
     selectedSection = section;
     pageContent.scrollTop = 0;
+  }
+
+  function validLoggingLimits(settings: LoggingSettings): boolean {
+    return Number.isInteger(settings.maxFileSizeMB) &&
+      Number.isInteger(settings.maxRecordingSizeMB) &&
+      settings.maxFileSizeMB >= 1 && settings.maxFileSizeMB <= 1024 &&
+      settings.maxRecordingSizeMB >= settings.maxFileSizeMB && settings.maxRecordingSizeMB <= 10240;
+  }
+
+  async function chooseLoggingDirectory() {
+    if (choosingLoggingDirectory || loggingSettingsLoading || !loggingSettingsReady || loggingSettingsBusy) {
+      return;
+    }
+    choosingLoggingDirectory = true;
+    try {
+      const directory = await onchooseloggingdirectory();
+      if (directory) {
+        loggingDraft.directory = directory;
+      }
+    } finally {
+      choosingLoggingDirectory = false;
+    }
+  }
+
+  async function saveLoggingSettings() {
+    if (!validLoggingLimits(loggingDraft) || loggingSettingsLoading || !loggingSettingsReady || loggingSettingsBusy) {
+      return;
+    }
+    await onloggingsave({ ...loggingDraft });
   }
 
   function applyScrollback(event: SubmitEvent) {
@@ -320,6 +380,53 @@
               <p id="scrollback-warning" class="hint">Lowering this limit removes the oldest retained lines in every open terminal. Removed output cannot be recovered.</p>
             </section>
           {/if}
+          {#if selectedSection === "logging"}
+            <section aria-labelledby="logging-heading">
+              <div class="section-heading">
+                <h2 id="logging-heading">Session logging</h2>
+                <p>Choose where transcripts are stored and set recording size limits.</p>
+              </div>
+              <div class="setting-group">
+                <div class="setting-row">
+                  <div><strong>Log directory</strong><span>Recording files are stored on this device.</span></div>
+                  <div class="directory-picker">
+                    <input aria-label="Log directory" class="technical" value={loggingDraft.directory} readonly />
+                    <button class="update-button" type="button" disabled={loggingSettingsLoading || !loggingSettingsReady || loggingSettingsBusy || choosingLoggingDirectory} onclick={chooseLoggingDirectory}>
+                      {choosingLoggingDirectory ? "Choosing…" : "Choose…"}
+                    </button>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div><strong>Maximum file size</strong><span>Start a new file when a transcript reaches this size.</span></div>
+                  <label class="number-field"><input aria-label="Maximum file size in megabytes" type="number" min="1" max="1024" step="1" value={loggingDraft.maxFileSizeMB} disabled={loggingSettingsLoading || !loggingSettingsReady || loggingSettingsBusy} onchange={(event) => (loggingDraft.maxFileSizeMB = Number(event.currentTarget.value))} /> <span>MB</span></label>
+                </div>
+                <div class="setting-row">
+                  <div><strong>Maximum recording size</strong><span>Stop recording at this total size.</span></div>
+                  <label class="number-field"><input aria-label="Maximum recording size in megabytes" type="number" min={Math.max(1, loggingDraft.maxFileSizeMB)} max="10240" step="1" value={loggingDraft.maxRecordingSizeMB} disabled={loggingSettingsLoading || !loggingSettingsReady || loggingSettingsBusy} onchange={(event) => (loggingDraft.maxRecordingSizeMB = Number(event.currentTarget.value))} /> <span>MB</span></label>
+                </div>
+              </div>
+              {#if loggingSettingsError}
+                <p class="logging-settings-status error" role="alert">{loggingSettingsError}</p>
+                {#if !loggingSettingsReady}
+                  <div class="logging-settings-actions">
+                    <button class="update-button" type="button" disabled={loggingSettingsLoading} onclick={onreloadloggingsettings}>Retry loading settings</button>
+                  </div>
+                {/if}
+              {:else if loggingSettingsLoading}
+                <p class="logging-settings-status" role="status">Loading logging settings…</p>
+              {:else if loggingSettingsStatus}
+                <p class="logging-settings-status" role="status">{loggingSettingsStatus}</p>
+              {/if}
+              {#if !validLoggingLimits(loggingDraft)}
+                <p class="logging-settings-status error" role="alert">Use whole numbers from 1 to 1024 MB per file. The total limit must be at least the file limit and no more than 10240 MB.</p>
+              {/if}
+              <div class="logging-settings-actions">
+                <button class="update-button" type="button" disabled={loggingSettingsLoading || !loggingSettingsReady || loggingSettingsBusy || !validLoggingLimits(loggingDraft)} onclick={saveLoggingSettings}>
+                  {loggingSettingsBusy ? "Saving…" : "Save logging settings"}
+                </button>
+              </div>
+            </section>
+          {/if}
         </div>
       </main>
     </div>
@@ -467,6 +574,13 @@
     color: var(--text-primary);
     font: inherit;
   }
+  .directory-picker { display: flex; flex: 1 1 340px; align-items: center; gap: 8px; min-width: 0; }
+  .directory-picker input { flex: 1; min-width: 0; min-height: 38px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--input-surface); color: var(--text-secondary); font: var(--ui-font-small) ui-monospace, "SF Mono", Menlo, monospace; }
+  .number-field { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
+  .number-field input { width: 104px; min-height: 38px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--input-surface); color: var(--text-primary); font: inherit; }
+  .logging-settings-status { margin: 12px 0 0; color: var(--text-secondary); font-size: var(--ui-font-small); }
+  .logging-settings-status.error { color: var(--status-error); }
+  .logging-settings-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
   .stepper button { min-width: 34px; font-size: 20px; }
   .stepper button:disabled { opacity: .45; }
   output { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }

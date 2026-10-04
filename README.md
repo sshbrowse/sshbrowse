@@ -23,6 +23,7 @@ SSHBrowse does not implement the SSH protocol itself, proxy SSH traffic through 
 - Choose a saved connection as a jump host, or enter a raw ProxyJump route
 - Open SSH, SFTP, and local terminal sessions
 - Search terminal output and configure scrollback history
+- Save terminal output to text files
 - Work with tabs or tiled terminals
 - Send commands or live input to multiple sessions
 
@@ -54,6 +55,10 @@ Use **Find in Terminal…** in the application or terminal context menu to searc
 the selected pane (Cmd+F on macOS, Ctrl+Shift+F on Linux and Windows). Set retained
 history under **Settings > Terminal > Scrollback lines**. Search may be unavailable
 for very long wrapped output; clear the terminal or reduce scrollback to resume.
+
+Use **Start logging** in an SSH, SFTP, or local terminal pane to save new output as text. **Stop** ends the recording, and **Show log** opens its folder. Enable **Log terminal output automatically** on a saved connection to record from startup.
+
+Choose the folder and size limits in **Settings > Logging**. Files are split into numbered segments; reaching the recording limit stops logging while the terminal keeps running. Old logs are kept until you delete them. Logs can contain sensitive output, and SSHBrowse does not redact or encrypt them. Full-screen programs may not produce a readable transcript.
 
 ## Help and contributing
 

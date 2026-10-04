@@ -58,6 +58,54 @@ func TestStoreWritesSchemaVersionOne(t *testing.T) {
 	}
 }
 
+func TestSessionLoggingFieldsAreOptionalAndPersistent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "connections.json")
+	legacy := []byte(`{"version":1,"connections":[{"id":"old","name":"Legacy","host":"legacy.example"}],"folders":[]}`)
+	if err := os.WriteFile(path, legacy, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := NewStore(path)
+	connections, err := store.List()
+	if err != nil {
+		t.Fatalf("read legacy profile: %v", err)
+	}
+	if len(connections) != 1 || connections[0].LogOutput {
+		t.Fatalf("legacy connections = %+v", connections)
+	}
+	settings, err := store.LoggingSettings()
+	if err != nil || settings != nil {
+		t.Fatalf("legacy logging settings = %+v, error = %v; want nil", settings, err)
+	}
+
+	connections[0].LogOutput = true
+	if _, err := store.Save(connections[0]); err != nil {
+		t.Fatal(err)
+	}
+	wantSettings := SessionLoggingSettings{
+		Directory:          filepath.Join(t.TempDir(), "logs"),
+		MaxFileSizeMB:      10,
+		MaxRecordingSizeMB: 100,
+	}
+	if err := store.SaveLoggingSettings(wantSettings); err != nil {
+		t.Fatal(err)
+	}
+
+	gotConnections, err := store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotSettings, err := store.LoggingSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gotConnections) != 1 || !gotConnections[0].LogOutput {
+		t.Fatalf("saved logOutput preference = %+v", gotConnections)
+	}
+	if gotSettings == nil || *gotSettings != wantSettings {
+		t.Fatalf("saved logging settings = %+v, want %+v", gotSettings, wantSettings)
+	}
+}
+
 func TestStoreRejectsUnsupportedFileVersions(t *testing.T) {
 	for _, version := range []int{0, 2} {
 		t.Run("version "+strconv.Itoa(version), func(t *testing.T) {

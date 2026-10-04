@@ -54,6 +54,7 @@ func main() {
 
 	application.RegisterEvent[app.SessionData](app.EventSessionData)
 	application.RegisterEvent[app.SessionExit](app.EventSessionExit)
+	application.RegisterEvent[app.SessionLoggingState](app.EventSessionLogging)
 	application.RegisterEvent[app.FileDropEvent](app.EventWindowFilesDropped)
 
 	// The guard needs the app, and the app options need the guard; the

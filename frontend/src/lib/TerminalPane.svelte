@@ -36,7 +36,12 @@
   import "@xterm/xterm/css/xterm.css";
   import { Clipboard, Events } from "@wailsio/runtime";
   import * as Sessions from "../../bindings/sshbrowse/internal/app/sessions";
-  import type { FileDropEvent, SessionData, SessionExit } from "../../bindings/sshbrowse/internal/app/models";
+  import type {
+    FileDropEvent,
+    SessionData,
+    SessionExit,
+    SessionLoggingState as BackendSessionLoggingState,
+  } from "../../bindings/sshbrowse/internal/app/models";
   import {
     currentPlatform,
     linuxShortcutFor,
@@ -75,6 +80,15 @@
     pasteClipboardForBroadcastGeneration,
     type LiveBroadcastPasteState,
   } from "./liveBroadcast";
+  import {
+    canApplyLoggingResult,
+    closeAndReleaseLoggingState,
+    isSessionLoggingStateOwnedByPane,
+    isLoggingEventForCurrentProcess,
+    shouldDeferLoggingStateRelease,
+    type SessionLoggingState,
+  } from "./sessionLogging";
+  import { errorMessage } from "./errors";
   import { normalizeTerminalScrollback } from "./storage";
   import {
     terminalSearchCommandFor,
@@ -114,6 +128,7 @@
     onpastewarningschange,
     onfocus,
     onclose,
+    oncloseerror,
     onsearchopen = () => {},
   }: {
     sessionId: number;
@@ -149,6 +164,7 @@
     onpastewarningschange: (disabled: boolean) => void;
     onfocus: () => void;
     onclose: () => void;
+    oncloseerror: (sessionLabel: string, logPath: string, message: string) => void;
     onsearchopen?: () => void;
   } = $props();
 
@@ -167,6 +183,13 @@
   let searchResult = $state<ISearchResultChangeEvent>({ resultIndex: -1, resultCount: 0 });
   let searchResultLabel = $derived(terminalSearchResultLabel(searchQuery, searchResult));
   let processInstanceId = $state<number | null>(null);
+  let loggingProcessId: number | null = null;
+  let pendingOpenId: number | null = null;
+  let loggingState = $state<SessionLoggingState | null>(null);
+  let loggingActionError = $state("");
+  let loggingCanRetry = $state(false);
+  let loggingBusy = $state(false);
+  let loggingRevision = 0;
   let disposed = false;
   let status = $state<SessionStatus>("connecting");
   let exitCode = $state<number | null>(null);
@@ -499,6 +522,115 @@
     onstatus(next);
   }
 
+  function applyLoggingState(next: BackendSessionLoggingState) {
+    loggingRevision++;
+    loggingState = {
+      id: next.id,
+      active: next.active && next.error === "" && status !== "closed",
+      path: next.path,
+      error: next.error,
+    };
+    loggingActionError = "";
+    loggingCanRetry = next.error !== "";
+  }
+
+  async function refreshLoggingState(id: number) {
+    const revision = loggingRevision;
+    try {
+      const next = await Sessions.GetLoggingState(id);
+      if (
+        !disposed &&
+        !loggingBusy &&
+        canApplyLoggingResult(next.id, loggingProcessId, revision, loggingRevision)
+      ) {
+        applyLoggingState(next);
+      }
+    } catch (err) {
+      if (!disposed && loggingProcessId === id && revision === loggingRevision) {
+        loggingActionError = `Could not read logging status: ${String(err)}`;
+        loggingCanRetry = false;
+      }
+    }
+  }
+
+  function restoreTerminalFocusForPointerLoggingAction(event: MouseEvent) {
+    // Keep keyboard activation on its button; pointer focus returns before async work starts.
+    if (event.detail > 0) {
+      terminal.focus();
+    }
+  }
+
+  async function startLogging(event: MouseEvent) {
+    const id = processInstanceId;
+    if (id === null || status !== "live" || loggingBusy) {
+      return;
+    }
+    restoreTerminalFocusForPointerLoggingAction(event);
+    loggingBusy = true;
+    loggingActionError = "";
+    loggingCanRetry = false;
+    const revision = loggingRevision;
+    try {
+      const next = await Sessions.StartLogging(id);
+      if (!disposed && canApplyLoggingResult(next.id, loggingProcessId, revision, loggingRevision)) {
+        applyLoggingState(next);
+      }
+    } catch (err) {
+      if (!disposed && loggingProcessId === id && loggingRevision === revision) {
+        loggingActionError = `Could not start logging: ${String(err)}`;
+        loggingCanRetry = true;
+      }
+    } finally {
+      if (!disposed && loggingProcessId === id) {
+        loggingBusy = false;
+      }
+    }
+  }
+
+  async function stopLogging(event: MouseEvent) {
+    const id = processInstanceId;
+    if (id === null || status !== "live" || loggingBusy) {
+      return;
+    }
+    restoreTerminalFocusForPointerLoggingAction(event);
+    loggingBusy = true;
+    loggingActionError = "";
+    loggingCanRetry = false;
+    const revision = loggingRevision;
+    try {
+      const next = await Sessions.StopLogging(id);
+      if (!disposed && canApplyLoggingResult(next.id, loggingProcessId, revision, loggingRevision)) {
+        applyLoggingState(next);
+      }
+    } catch (err) {
+      if (!disposed && loggingProcessId === id && loggingRevision === revision) {
+        loggingActionError = `Could not stop logging: ${String(err)}`;
+        loggingCanRetry = false;
+      }
+    } finally {
+      if (!disposed && loggingProcessId === id) {
+        loggingBusy = false;
+      }
+    }
+  }
+
+  async function showLogInFolder() {
+    const pathProcessId = loggingState?.id;
+    if (!loggingState?.path || pathProcessId === undefined) {
+      return;
+    }
+    const revision = loggingRevision;
+    loggingActionError = "";
+    try {
+      await Sessions.ShowLogInFolder(pathProcessId);
+    } catch (err) {
+      if (!disposed && loggingProcessId === pathProcessId && loggingRevision === revision) {
+        loggingActionError = `Could not show the log folder: ${String(err)}`;
+        loggingCanRetry = false;
+      }
+    }
+  }
+
   function requestResize(cols: number, rows: number) {
     if (processInstanceId === null || status !== "live") {
       return;
@@ -541,6 +673,13 @@
     setStatus("connecting");
     exitCode = null;
     const newProcessInstanceId = nextProcessInstanceId++;
+    loggingProcessId = newProcessInstanceId;
+    pendingOpenId = newProcessInstanceId;
+    loggingRevision++;
+    loggingState = null;
+    loggingActionError = "";
+    loggingCanRetry = false;
+    loggingBusy = false;
     processInstanceId = newProcessInstanceId;
     onprocesschange(newProcessInstanceId);
     try {
@@ -552,16 +691,30 @@
         await Sessions.Open(newProcessInstanceId, $state.snapshot(connection), terminal.cols, terminal.rows);
       }
     } catch (err) {
+      if (pendingOpenId === newProcessInstanceId) {
+        pendingOpenId = null;
+      }
       if (disposed) {
+        releaseLoggingState(newProcessInstanceId);
         return;
       }
-      if (processInstanceId === newProcessInstanceId) {
-        processInstanceId = null;
-        onprocesschange(null);
+      if (!isSessionLoggingStateOwnedByPane(newProcessInstanceId, processInstanceId, loggingProcessId)) {
+        // A late Open failure from before reconnect must not change the new pane state.
+        releaseLoggingState(newProcessInstanceId);
+        return;
       }
+      if (processInstanceId !== newProcessInstanceId) {
+        // The old process exited while Open was still returning; keep its log state.
+        return;
+      }
+      processInstanceId = null;
+      onprocesschange(null);
       terminal.write(`\r\n[failed to start ${programName}: ${err}]\r\n`);
       setStatus("closed");
       return;
+    }
+    if (pendingOpenId === newProcessInstanceId) {
+      pendingOpenId = null;
     }
     if (disposed) {
       // The pane was closed while the process was starting; nobody owns it now.
@@ -569,14 +722,21 @@
         processInstanceId = null;
         onprocesschange(null);
       }
-      Sessions.Close(newProcessInstanceId).catch(console.error);
+      closeAndReleaseSession(newProcessInstanceId, loggingPathForProcess(newProcessInstanceId));
       return;
     }
     if (processInstanceId !== newProcessInstanceId) {
-      // The process exited while the Open call was returning.
+      if (!isSessionLoggingStateOwnedByPane(newProcessInstanceId, processInstanceId, loggingProcessId)) {
+        // A newer connection replaced this one while its Open call was pending.
+        closeAndReleaseSession(newProcessInstanceId, loggingPathForProcess(newProcessInstanceId));
+      }
+      // If this is still the pane's exited process, retain its log for Show log.
       return;
     }
     setStatus("live");
+    // Automatic logging can start before Open returns. The event listener is
+    // already active; this snapshot closes the gap if its event arrived early.
+    void refreshLoggingState(newProcessInstanceId);
     // A fit while Open was pending was not sent to the new process.
     requestResize(terminal.cols, terminal.rows);
     if (focusWhenReady && selected && !searchOpen) {
@@ -586,9 +746,35 @@
 
   // Scrollback is kept; the new session starts below the old output.
   function reconnect() {
+    if (
+      loggingProcessId !== null &&
+      !shouldDeferLoggingStateRelease(loggingProcessId, pendingOpenId)
+    ) {
+      releaseLoggingState(loggingProcessId);
+    }
     closedInput = "";
     terminal.write("\r\n");
     connect(true);
+  }
+
+  function loggingPathForProcess(id: number): string {
+    return loggingState?.id === id ? loggingState.path : "";
+  }
+
+  function releaseLoggingState(id: number) {
+    void Sessions.ReleaseLoggingState(id).catch((error: unknown) => {
+      console.error("Could not release session logging state", error);
+    });
+  }
+
+  function closeAndReleaseSession(id: number, logPath: string) {
+    const closingSessionLabel = sessionLabel;
+    void closeAndReleaseLoggingState(
+      () => Sessions.Close(id),
+      () => Sessions.ReleaseLoggingState(id),
+      (error) => oncloseerror(closingSessionLabel, logPath, errorMessage(error)),
+      (error) => console.error("Could not release session logging state", error),
+    );
   }
 
   // Text typed into a closed pane, so "exit" dismisses it like a real shell would.
@@ -748,9 +934,21 @@
         }
         processInstanceId = null;
         onprocesschange(null);
+        const finalLoggingState = loggingState;
+        if (finalLoggingState !== null && finalLoggingState.id === event.data.id && finalLoggingState.active) {
+          // The process has ended; do not leave the pane claiming that its
+          // recorder is still active if the final state event is delayed.
+          loggingRevision++;
+          loggingState = { ...finalLoggingState, active: false };
+        }
         exitCode = event.data.exitCode;
         terminal.write(`\r\n[${programName} exited with code ${exitCode}]\r\n`);
         setStatus("closed");
+      }
+    });
+    const offLogging = Events.On("session:logging", (event: { data: BackendSessionLoggingState }) => {
+      if (!disposed && isLoggingEventForCurrentProcess(event.data.id, loggingProcessId)) {
+        applyLoggingState(event.data);
       }
     });
     const offFileDrop = Events.On(
@@ -818,6 +1016,7 @@
       observer.disconnect();
       offData();
       offExit();
+      offLogging();
       offFileDrop();
       window.removeEventListener(terminalFontEvent, onTerminalFontCommand);
       window.removeEventListener("focus", onWindowFocus);
@@ -832,6 +1031,8 @@
         pendingFitFrame = null;
       }
       const closingProcessInstanceId = processInstanceId;
+      const closingLoggingProcessId = loggingProcessId;
+      const closingPendingOpenId = pendingOpenId;
       if (pasteConfirmation !== null) {
         onpasteconfirmationchange(false);
       }
@@ -839,7 +1040,16 @@
       onprocesschange(null);
       pendingResize = null;
       if (closingProcessInstanceId !== null && status === "live") {
-        Sessions.Close(closingProcessInstanceId).catch(console.error);
+        closeAndReleaseSession(
+          closingProcessInstanceId,
+          loggingPathForProcess(closingProcessInstanceId),
+        );
+      } else if (
+        closingLoggingProcessId !== null &&
+        !shouldDeferLoggingStateRelease(closingLoggingProcessId, closingPendingOpenId)
+      ) {
+        // Closed panes retain their log path for Show log until they are removed.
+        releaseLoggingState(closingLoggingProcessId);
       }
       terminal.dispose();
     };
@@ -913,37 +1123,64 @@
   onfocusin={onfocus}
   onfocusout={() => onfocusout(sessionId)}
 >
-  <div
-    class="term"
-    bind:this={container}
-    role="region"
-    aria-label="Terminal"
-    style:--custom-contextmenu="terminal"
-    style:--custom-contextmenu-data={sessionId}
-    oncontextmenu={handleTerminalContextMenu}
-  ></div>
-  {#if searchOpen}
-    <form class="terminal-search" role="search" aria-label="Search terminal output" onsubmit={(event) => event.preventDefault()}>
-      <input
-        bind:this={searchInput}
-        bind:value={searchQuery}
-        aria-label="Find in terminal"
-        placeholder="Find in terminal"
-        maxlength={terminalSearchQueryLimit}
-        autocomplete="off"
-        spellcheck="false"
-        onkeydown={handleSearchKeydown}
-        oninput={handleSearchInput}
-        onfocus={() => search?.refresh()}
-        onblur={() => search?.clearActiveDecoration()}
-      />
-      <span class="search-results" role="status" aria-live="polite">{searchError || searchResultLabel}</span>
-      <button type="button" class:active={searchCaseSensitive} aria-label="Match case" aria-pressed={searchCaseSensitive} title="Match case" onkeydown={handleSearchKeydown} onclick={() => { searchCaseSensitive = !searchCaseSensitive; updateSearch(); }}>Aa</button>
-      <button type="button" aria-label="Previous match" title="Previous match (Shift+Enter)" disabled={!searchQuery || searchResult.resultCount === 0} onkeydown={handleSearchKeydown} onclick={() => navigateSearch("previous")}><ChevronUp size={15} /></button>
-      <button type="button" aria-label="Next match" title="Next match (Enter)" disabled={!searchQuery || searchResult.resultCount === 0} onkeydown={handleSearchKeydown} onclick={() => navigateSearch("next")}><ChevronDown size={15} /></button>
-      <button type="button" aria-label="Close search" title="Close search (Escape)" onkeydown={handleSearchKeydown} onclick={closeSearch}><X size={15} /></button>
-    </form>
+  {#if status === "live" || loggingState?.path || loggingState?.error || loggingActionError}
+    <div class="logging-controls" role="group" aria-label="Session logging">
+      {#if status === "live"}
+        {#if loggingState?.active}
+          <span class="recording-indicator" role="status"><span aria-hidden="true">●</span> Recording</span>
+          <button type="button" class="logging-button" disabled={loggingBusy} onclick={stopLogging}>Stop</button>
+        {:else}
+          <button type="button" class="logging-button" disabled={loggingBusy} title="Logs can contain sensitive output, including echoed commands." onclick={startLogging}>
+            {loggingBusy ? "Starting…" : "Start logging"}
+          </button>
+        {/if}
+      {/if}
+      {#if loggingState?.path}
+        <button type="button" class="logging-button" title={loggingState.path} onclick={showLogInFolder}>Show log</button>
+      {/if}
+      {#if loggingState?.error || loggingActionError}
+        <div class="logging-error" role="alert">
+          <span>{loggingActionError || (loggingState?.error ? `Logging failed: ${loggingState.error}` : "")}</span>
+          {#if status === "live" && loggingCanRetry && !loggingState?.active}
+            <button type="button" class="logging-button" disabled={loggingBusy} onclick={startLogging}>Retry</button>
+          {/if}
+        </div>
+      {/if}
+    </div>
   {/if}
+  <div class="terminal-area">
+    <div
+      class="term"
+      bind:this={container}
+      role="region"
+      aria-label="Terminal"
+      style:--custom-contextmenu="terminal"
+      style:--custom-contextmenu-data={sessionId}
+      oncontextmenu={handleTerminalContextMenu}
+    ></div>
+    {#if searchOpen}
+      <form class="terminal-search" role="search" aria-label="Search terminal output" onsubmit={(event) => event.preventDefault()}>
+        <input
+          bind:this={searchInput}
+          bind:value={searchQuery}
+          aria-label="Find in terminal"
+          placeholder="Find in terminal"
+          maxlength={terminalSearchQueryLimit}
+          autocomplete="off"
+          spellcheck="false"
+          onkeydown={handleSearchKeydown}
+          oninput={handleSearchInput}
+          onfocus={() => search?.refresh()}
+          onblur={() => search?.clearActiveDecoration()}
+        />
+        <span class="search-results" role="status" aria-live="polite">{searchError || searchResultLabel}</span>
+        <button type="button" class:active={searchCaseSensitive} aria-label="Match case" aria-pressed={searchCaseSensitive} title="Match case" onkeydown={handleSearchKeydown} onclick={() => { searchCaseSensitive = !searchCaseSensitive; updateSearch(); }}>Aa</button>
+        <button type="button" aria-label="Previous match" title="Previous match (Shift+Enter)" disabled={!searchQuery || searchResult.resultCount === 0} onkeydown={handleSearchKeydown} onclick={() => navigateSearch("previous")}><ChevronUp size={15} /></button>
+        <button type="button" aria-label="Next match" title="Next match (Enter)" disabled={!searchQuery || searchResult.resultCount === 0} onkeydown={handleSearchKeydown} onclick={() => navigateSearch("next")}><ChevronDown size={15} /></button>
+        <button type="button" aria-label="Close search" title="Close search (Escape)" onkeydown={handleSearchKeydown} onclick={closeSearch}><X size={15} /></button>
+      </form>
+    {/if}
+  </div>
   {#if dropError}
     <div class="banner" role="alert">
       <span>{dropError}</span>
@@ -979,6 +1216,8 @@
 <style>
   .pane {
     position: relative;
+    display: flex;
+    flex-direction: column;
     flex: 1;
     width: 100%;
     min-width: 0;
@@ -986,10 +1225,84 @@
     background: var(--terminal-background);
   }
   .term {
-    position: absolute;
-    inset: 0;
+    position: relative;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
     overflow: hidden;
     background: var(--terminal-background);
+  }
+  .terminal-area {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+  }
+  .logging-controls {
+    position: relative;
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 5px;
+    min-height: 34px;
+    box-sizing: border-box;
+    padding: 3px 8px;
+    pointer-events: none;
+  }
+  .logging-controls > * {
+    pointer-events: auto;
+  }
+  .recording-indicator,
+  .logging-button,
+  .logging-error {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 26px;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    font: var(--ui-font-small) var(--font-ui);
+    box-shadow: var(--shadow-panel);
+  }
+  .recording-indicator span {
+    color: var(--status-error);
+  }
+  .logging-button {
+    flex-shrink: 0;
+    cursor: default;
+    white-space: nowrap;
+  }
+  .logging-button:hover:not(:disabled) {
+    background: var(--control-hover);
+    color: var(--text-primary);
+  }
+  .logging-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus-ring);
+  }
+  .logging-button:disabled {
+    cursor: wait;
+    opacity: 0.6;
+  }
+  .logging-error {
+    min-width: 0;
+    border-color: var(--status-error);
+    background: var(--status-error-surface);
+    color: var(--status-error);
+    max-width: min(520px, 100%);
+    overflow-wrap: anywhere;
+  }
+  .logging-error span {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .term :global(.xterm) {
     /* FitAddon subtracts padding on xterm itself when sizing the grid. */

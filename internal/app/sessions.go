@@ -4,6 +4,7 @@ package app
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -14,13 +15,15 @@ import (
 
 	"sshbrowse/internal/profile"
 	"sshbrowse/internal/session"
+	"sshbrowse/internal/sessionlog"
 	"sshbrowse/internal/sshcmd"
 )
 
 const (
-	EventSessionData       = "session:data"
-	EventSessionExit       = "session:exit"
-	sessionShutdownTimeout = 10 * time.Second
+	EventSessionData             = "session:data"
+	EventSessionExit             = "session:exit"
+	sessionShutdownTimeout       = 10 * time.Second
+	defaultRecordingSetupTimeout = 5 * time.Second
 	// 20 tabs of 9 tiles, the same limits the frontend enforces.
 	maxSessions = 180
 )
@@ -40,12 +43,17 @@ type SessionExit struct {
 
 // Sessions is bound to the frontend. Each method is callable from TypeScript.
 type Sessions struct {
-	app   *application.App
-	store *profile.Store
+	app                 *application.App
+	store               *profile.Store
+	makeRecorder        func(sessionlog.Options) (sessionRecorder, error)
+	loggingStateEmitter func(SessionLoggingState)
 
-	mu           sync.Mutex
-	sessions     map[int]*managedSession
-	shuttingDown bool
+	mu                    sync.Mutex
+	sessions              map[int]*managedSession
+	shuttingDown          bool
+	loggingOwners         map[int]*loggingEntry
+	recordingSetupSlots   chan struct{}
+	recordingSetupTimeout time.Duration
 }
 
 var _ application.ServiceShutdown = (*Sessions)(nil)
@@ -53,13 +61,18 @@ var _ application.ServiceShutdown = (*Sessions)(nil)
 type managedSession struct {
 	running  *session.Session
 	delivery *outputDelivery
+	logging  *loggingController
 }
 
 func NewSessions(app *application.App, store *profile.Store) *Sessions {
 	return &Sessions{
-		app:      app,
-		store:    store,
-		sessions: make(map[int]*managedSession),
+		app:                   app,
+		store:                 store,
+		makeRecorder:          newSessionRecorder,
+		sessions:              make(map[int]*managedSession),
+		loggingOwners:         make(map[int]*loggingEntry),
+		recordingSetupSlots:   make(chan struct{}, maxSessions),
+		recordingSetupTimeout: defaultRecordingSetupTimeout,
 	}
 }
 
@@ -77,7 +90,11 @@ func (s *Sessions) Open(id int, connection profile.Connection, cols, rows int) e
 	if err != nil {
 		return err
 	}
-	return s.start(id, session.Options{Argv: argv, Cols: cols, Rows: rows})
+	label := connection.Name
+	if label == "" {
+		label = connection.Host
+	}
+	return s.start(id, session.Options{Argv: argv, Cols: cols, Rows: rows}, label, "ssh", connection.LogOutput)
 }
 
 // OpenSFTP starts sftp for a connection in the same PTY setup as Open.
@@ -96,7 +113,11 @@ func (s *Sessions) OpenSFTP(id int, connection profile.Connection, cols, rows in
 	if err != nil {
 		return err
 	}
-	return s.start(id, session.Options{Argv: argv, Dir: localDir, Cols: cols, Rows: rows})
+	label := connection.Name
+	if label == "" {
+		label = connection.Host
+	}
+	return s.start(id, session.Options{Argv: argv, Dir: localDir, Cols: cols, Rows: rows}, label, "sftp", connection.LogOutput)
 }
 
 // Resolve saved jumps from the current store, so edits to a hop apply to both
@@ -143,44 +164,69 @@ func (s *Sessions) OpenLocal(id, cols, rows int) error {
 	if err != nil {
 		return err
 	}
-	return s.start(id, session.Options{Argv: argv, Dir: home, Cols: cols, Rows: rows})
+	return s.start(id, session.Options{Argv: argv, Dir: home, Cols: cols, Rows: rows}, "local", "local", false)
 }
 
-func (s *Sessions) start(id int, options session.Options) error {
-	// The lock is held across Start so that an OnExit from a process that dies
-	// instantly cannot run its delete before the insert below.
+func (s *Sessions) start(id int, options session.Options, label, kind string, automaticLogging bool) error {
+	if label == "" {
+		label = kind
+	}
+	managed := &managedSession{logging: &loggingController{
+		state:        SessionLoggingState{ID: id},
+		label:        label,
+		kind:         kind,
+		setupSlots:   s.recordingSetupSlots,
+		setupTimeout: s.recordingSetupTimeout,
+		makeRecorder: s.makeRecorder,
+		publish:      s.emitLoggingState,
+	}}
+	if err := s.reserveSessionStart(id, managed); err != nil {
+		return err
+	}
+
+	if automaticLogging {
+		// Settings reads and recorder creation share one bounded setup wait.
+		// A logging setup failure is reported through session:logging and must
+		// not prevent the terminal process from starting.
+		_, _ = managed.logging.Start(s.GetLoggingSettings)
+	}
+
+	// Recheck because shutdown or another start may have changed state while
+	// configuration or recorder setup was in progress.
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.shuttingDown {
-		return fmt.Errorf("sessions are shutting down")
-	}
-	if _, taken := s.sessions[id]; taken {
-		return fmt.Errorf("session %d already exists", id)
-	}
-	if len(s.sessions) >= maxSessions {
-		return fmt.Errorf("session limit of %d reached", maxSessions)
+	if err := s.startValidationErrorLocked(id, managed); err != nil {
+		s.mu.Unlock()
+		return errors.Join(err, s.finalizeSession(managed, "session did not start"))
 	}
 
 	delivery := newOutputDelivery(outputAcknowledgementTimeout, func(event SessionData) {
-		s.app.Event.Emit(EventSessionData, event)
+		if s.app != nil {
+			s.app.Event.Emit(EventSessionData, event)
+		}
 	})
 	options.OnData = func(data []byte) bool {
+		managed.logging.Write(data)
 		return delivery.deliver(id, base64.StdEncoding.EncodeToString(data))
 	}
 	options.CancelData = delivery.Stop
 	options.OnExit = func(exitCode int) {
 		delivery.Stop()
-		s.mu.Lock()
-		delete(s.sessions, id)
-		s.mu.Unlock()
-		s.app.Event.Emit(EventSessionExit, SessionExit{ID: id, ExitCode: exitCode})
+		// Finalization errors are emitted in logging state and retained for Close.
+		_ = s.finalizeSession(managed, managed.logging.EndReason())
+		if s.app != nil {
+			s.app.Event.Emit(EventSessionExit, SessionExit{ID: id, ExitCode: exitCode})
+		}
 	}
 	started, err := session.Start(options)
 	if err != nil {
+		s.mu.Unlock()
 		delivery.Stop()
-		return err
+		return errors.Join(err, s.finalizeSession(managed, "session failed to start"))
 	}
-	s.sessions[id] = &managedSession{running: started, delivery: delivery}
+	managed.running = started
+	managed.delivery = delivery
+	s.sessions[id] = managed
+	s.mu.Unlock()
 	return nil
 }
 
@@ -214,10 +260,19 @@ func (s *Sessions) AcknowledgeOutput(id, sequence int) error {
 func (s *Sessions) Close(id int) error {
 	found, err := s.lookup(id)
 	if err != nil {
+		s.mu.Lock()
+		retained, exists := s.retainedLoggingResultLocked(id)
+		s.mu.Unlock()
+		if exists {
+			return retained.finalizationErr
+		}
 		return err
 	}
+	found.logging.SetEndReason("session closed; unread output may be omitted")
 	found.delivery.Stop()
-	return found.running.Close()
+	closeErr := found.running.Close()
+	_, loggingErr := found.logging.Finalize(found.logging.EndReason())
+	return errors.Join(closeErr, loggingErr)
 }
 
 // ServiceShutdown is called by Wails when the application quits. Sessions are
@@ -228,15 +283,29 @@ func (s *Sessions) ServiceShutdown() error {
 	open := make([]*managedSession, 0, len(s.sessions))
 	for _, running := range s.sessions {
 		open = append(open, running)
+		running.logging.SetEndReason("session closed; unread output may be omitted")
 		running.delivery.Stop()
 	}
+	reserved := make([]*managedSession, 0, len(s.loggingOwners))
+	for _, entry := range s.loggingOwners {
+		if entry.owner != nil {
+			reserved = append(reserved, entry.owner)
+		}
+	}
 	s.mu.Unlock()
+	for _, managed := range reserved {
+		managed.logging.Cancel()
+	}
 
 	completed := make(chan struct{}, len(open))
 	for _, running := range open {
 		go func(running *managedSession) {
-			// Shutdown cannot recover from a per-session close error; the outer timeout still bounds quitting.
-			_ = running.running.Close()
+			// Shutdown cannot recover from per-session close errors; the outer
+			// timeout still bounds quitting.
+			if running.running != nil {
+				_ = running.running.Close()
+			}
+			_, _ = running.logging.Finalize(running.logging.EndReason())
 			completed <- struct{}{}
 		}(running)
 	}

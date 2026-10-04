@@ -83,6 +83,7 @@ export function emptyConnection(): Connection {
     jumpHost: "",
     agentForwarding: false,
     x11Forwarding: false,
+    logOutput: false,
     localForwards: [],
     remoteForwards: [],
     dynamicForwards: [],
