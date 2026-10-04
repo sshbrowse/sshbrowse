@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	githubRepository       = "osmocomet/sshbrowse"
+	githubRepository       = "sshbrowse/sshbrowse"
 	EventUpdateInfoRequest = "update:info-request"
 	EventUpdateInfo        = "update:info"
 	EventUpdateDownload    = "update:download-request"

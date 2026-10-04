@@ -37,7 +37,7 @@ export function githubReleaseURL(value: unknown): string {
   if (typeof value !== "string") return "";
   try {
     const url = new URL(value);
-    return url.origin === "https://github.com" && url.pathname.startsWith("/osmocomet/sshbrowse/releases/tag/") && !url.username && !url.password
+    return url.origin === "https://github.com" && url.pathname.startsWith("/sshbrowse/sshbrowse/releases/tag/") && !url.username && !url.password
       ? url.href : "";
   } catch {
     return "";

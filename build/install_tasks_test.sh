@@ -115,7 +115,7 @@ exercise_destination() {
   run_task install "$destination"
   if [[ "$platform" == linux ]]; then
     local binary="$destination/bin/sshbrowse"
-    local desktop="$destination/share/applications/io.github.osmocomet.sshbrowse.desktop"
+    local desktop="$destination/share/applications/io.github.sshbrowse.sshbrowse.desktop"
     test -x "$binary"
     test -f "$desktop"
     validate_linux_desktop_entry "$desktop"
@@ -133,7 +133,7 @@ exercise_destination() {
   run_task uninstall "$destination"
   if [[ "$platform" == linux ]]; then
     test ! -e "$destination/bin/sshbrowse"
-    test ! -e "$destination/share/applications/io.github.osmocomet.sshbrowse.desktop"
+    test ! -e "$destination/share/applications/io.github.sshbrowse.sshbrowse.desktop"
     test ! -e "$destination/share/icons/hicolor/256x256/apps/sshbrowse.png"
   else
     test ! -e "$destination/sshbrowse.app"
@@ -156,7 +156,7 @@ expect_linux_percent_rejection() {
       ;;
   esac
   cmp "$sentinels/percent-binary" "$percent_destination/bin/sshbrowse"
-  cmp "$sentinels/percent-desktop" "$percent_destination/share/applications/io.github.osmocomet.sshbrowse.desktop"
+  cmp "$sentinels/percent-desktop" "$percent_destination/share/applications/io.github.sshbrowse.sshbrowse.desktop"
   cmp "$sentinels/percent-icon" "$percent_destination/share/icons/hicolor/256x256/apps/sshbrowse.png"
 }
 
@@ -169,11 +169,11 @@ if [[ "$platform" == linux ]]; then
     "$percent_destination/share/applications" \
     "$percent_destination/share/icons/hicolor/256x256/apps"
   printf '%s\n' 'pre-existing binary' > "$percent_destination/bin/sshbrowse"
-  printf '%s\n' 'pre-existing desktop entry' > "$percent_destination/share/applications/io.github.osmocomet.sshbrowse.desktop"
+  printf '%s\n' 'pre-existing desktop entry' > "$percent_destination/share/applications/io.github.sshbrowse.sshbrowse.desktop"
   printf '%s\n' 'pre-existing icon' > "$percent_destination/share/icons/hicolor/256x256/apps/sshbrowse.png"
   chmod 0755 "$percent_destination/bin/sshbrowse"
   cp "$percent_destination/bin/sshbrowse" "$sentinels/percent-binary"
-  cp "$percent_destination/share/applications/io.github.osmocomet.sshbrowse.desktop" "$sentinels/percent-desktop"
+  cp "$percent_destination/share/applications/io.github.sshbrowse.sshbrowse.desktop" "$sentinels/percent-desktop"
   cp "$percent_destination/share/icons/hicolor/256x256/apps/sshbrowse.png" "$sentinels/percent-icon"
   expect_linux_percent_rejection install
   expect_linux_percent_rejection update

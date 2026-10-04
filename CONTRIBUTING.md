@@ -23,7 +23,7 @@ Submitting a contribution does not grant you independent redistribution rights o
 Install Git, the Go version in `go.mod`, Node.js 24 with npm, and the Wails CLI version matching `go.mod`. Native builds need Xcode Command Line Tools on macOS; GCC, `pkg-config`, and GTK4/WebKitGTK 6.0 development packages on Linux; or WebView2 Runtime and Windows OpenSSH Client on Windows. Windows release builds also need Git Bash on `PATH` and NSIS 3.11 (`makensis`). Run `wails3 doctor` to check the toolchain.
 
 ```sh
-git clone https://github.com/osmocomet/sshbrowse.git
+git clone https://github.com/sshbrowse/sshbrowse.git
 cd sshbrowse
 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.26
 wails3 task dev
