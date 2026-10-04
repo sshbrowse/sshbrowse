@@ -33,7 +33,7 @@ SSHBrowse provides native packages for macOS, Windows, and Linux. The following 
 | Platform | Package | Notes |
 | --- | --- | --- |
 | macOS 15+ (Apple silicon and Intel) | Universal DMG | Native packaged acceptance performed on Apple silicon. Ad-hoc signed, not notarized; Gatekeeper may require manual approval. |
-| Linux x86-64 | DEB or RPM | Fedora 44 GNOME/Wayland RPM and Ubuntu 26.04 GNOME/Wayland DEB accepted natively. Other distributions need GTK4 and WebKitGTK 6.0 and are less tested. Local packages are not repository-signed. |
+| Linux x86-64 | Binary, DEB or RPM | Requires GTK4 and WebKitGTK 6.0. Fedora 44 GNOME/Wayland RPM and Ubuntu 26.04 GNOME/Wayland DEB accepted natively. Other distributions are less tested. Local packages are not repository-signed. |
 | Windows 11 x64 only | Per-user installer | Native acceptance has covered the installer and core SSH/SFTP behavior. Requires the Windows OpenSSH Client and Microsoft Edge WebView2 Runtime, normally included with Windows 11; Setup stops if WebView2 is missing. SSHBrowse does not bundle, download, or install WebView2. The installer is unsigned; SmartScreen may warn. |
 
 For release downloads, check the architecture and compare the SHA-256 hash with `SHA256SUMS`.
@@ -41,6 +41,8 @@ For release downloads, check the architecture and compare the SHA-256 hash with 
 ## Get started
 
 Download the latest package from [Releases](https://github.com/sshbrowse/sshbrowse/releases).
+
+Linux release notes include manual installation steps and an optional installer script.
 
 After launching SSHBrowse, you can:
 
@@ -55,7 +57,7 @@ for very long wrapped output; clear the terminal or reduce scrollback to resume.
 
 ## Help and contributing
 
-Packaged releases check GitHub for updates at startup, at most once every 24 hours. Disable this in **Settings > General > Updates**. Downloads and restarts require your approval; Linux notifications link to the release so you can install the updated DEB or RPM package.
+Release builds check GitHub for updates at startup, at most once every 24 hours. Disable this in **Settings > General > Updates**. Downloads and restarts require your approval. Linux binaries installed at `~/.local/bin/sshbrowse` support in-app updates; DEB/RPM installations link to the release for package updates.
 
 For connection problems, try the same destination with system OpenSSH (`ssh alias` or `ssh user@host`). Use the [bug report form](https://github.com/sshbrowse/sshbrowse/issues/new/choose) for bugs and [SECURITY.md](SECURITY.md) for private vulnerability reports. Redact credentials and private host details.
 

@@ -40,6 +40,7 @@ tasks:
       - task: common:build:frontend
     cmds:
       - go test ./...
+      - bash build/linux/install_test.sh
       - npm --prefix frontend run check
       - npm --prefix frontend test
 
@@ -61,6 +62,10 @@ tasks:
       - task: package
         vars:
           RELEASE: "true"
+    cmds:
+      - install -m 0755 "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/SSHBrowse-Linux-x86_64"
+      - install -m 0644 "build/appicon.png" "{{.BIN_DIR}}/sshbrowse.png"
+      - install -m 0755 "build/linux/install.sh" "{{.BIN_DIR}}/install.sh"
 
   prepare:package:
     summary: Builds the Linux binary and desktop metadata shared by package formats
