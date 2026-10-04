@@ -14,7 +14,8 @@ test("Settings shows check, download, retry, and restart controls for each updat
   // this component without a loader for Lucide's .svelte files.
   const code = compiled
     .replace(/^import (ArrowLeft|Check|X) from .*;$/gm, "const $1 = () => {};")
-    .replace('from "./updates"', `from ${JSON.stringify(new URL("../src/lib/updates.ts", import.meta.url).href)}`);
+    .replace('from "./updates"', `from ${JSON.stringify(new URL("../src/lib/updates.ts", import.meta.url).href)}`)
+    .replace('from "./storage"', `from ${JSON.stringify(new URL("../src/lib/storage.ts", import.meta.url).href)}`);
   const directory = mkdtempSync(join(process.cwd(), "node_modules/.settings-updater-test-"));
   try {
     const path = join(directory, "SettingsPage.mjs");
@@ -29,6 +30,7 @@ test("Settings shows check, download, retry, and restart controls for each updat
       terminalFontName: "default",
       rightClickToPaste: false,
       copyOnSelection: false,
+      terminalScrollbackLines: 1000,
       sidebarWidth: 240,
       updateInfo: { version: "1.0.0", availability: "supported", message: "" },
       updateStatus: "",

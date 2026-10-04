@@ -15,6 +15,7 @@
     "@lucide/svelte": "1.48.0",
     "@wailsio/runtime": "3.0.0-beta.26",
     "@xterm/addon-fit": "0.11.0",
+    "@xterm/addon-search": "0.16.0",
     "@xterm/xterm": "6.0.0"
   },
   "devDependencies": {

@@ -16,6 +16,8 @@ export interface UpdateInfo {
 }
 export const terminalCopyMenuEvent = "menu:terminalCopy";
 export const terminalPasteMenuEvent = "menu:terminalPaste";
+export const findTerminalMenuEvent = "menu:findTerminal";
+export const terminalSearchMenuEvent = "menu:terminalSearch";
 
 export type EditMenuAction = "undo" | "redo" | "cut" | "copy" | "paste" | "selectAll";
 

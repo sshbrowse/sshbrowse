@@ -12,6 +12,7 @@ export const preferenceKeys = {
   copyOnSelection: "sshbrowse.terminal.copyOnSelection",
   checkUpdatesOnStartup: "sshbrowse.updates.checkOnStartup",
   lastStartupUpdateCheck: "sshbrowse.updates.lastStartupCheck",
+  terminalScrollbackLines: "sshbrowse.terminal.scrollbackLines",
   collapsedFolders: "sshbrowse.sidebar.collapsed",
   terminalPasteWarningsDisabled: "sshbrowse.terminal.pasteWarningsDisabled",
   themeName: "sshbrowse.appearance.theme",
@@ -30,6 +31,9 @@ export const interfaceScaleMinimum = 0.8;
 export const interfaceScaleMaximum = 1.6;
 export const interfaceScaleDefault = 1;
 export const interfaceScaleStep = 0.1;
+export const terminalScrollbackDefault = 1000;
+export const terminalScrollbackMinimum = 0;
+export const terminalScrollbackMaximum = 50000;
 
 export interface Preferences {
   sidebarWidth: number;
@@ -38,6 +42,7 @@ export interface Preferences {
   rightClickToPaste: boolean;
   copyOnSelection: boolean;
   checkUpdatesOnStartup: boolean;
+  terminalScrollbackLines: number;
   collapsedFolders: Record<string, boolean>;
   terminalPasteWarningsDisabled: boolean;
   themeName: ThemeName;
@@ -59,6 +64,22 @@ function readValue(storage: PreferenceStorage, key: string): string | null {
 function readBoolean(storage: PreferenceStorage, key: string, fallback: boolean): boolean {
   const value = readValue(storage, key);
   return value === "true" ? true : value === "false" ? false : fallback;
+}
+
+export function normalizeTerminalScrollback(value: number): number {
+  if (!Number.isFinite(value)) {
+    return terminalScrollbackDefault;
+  }
+  return Math.min(terminalScrollbackMaximum, Math.max(terminalScrollbackMinimum, Math.round(value)));
+}
+
+function readTerminalScrollback(storage: PreferenceStorage): number {
+  const raw = readValue(storage, preferenceKeys.terminalScrollbackLines);
+  if (raw === null || !/^[+-]?\d+$/.test(raw.trim())) {
+    return terminalScrollbackDefault;
+  }
+  const value = Number(raw);
+  return Number.isInteger(value) ? normalizeTerminalScrollback(value) : terminalScrollbackDefault;
 }
 
 function readSidebarWidth(storage: PreferenceStorage): number {
@@ -131,6 +152,7 @@ export function loadPreferences(storage: PreferenceStorage): Preferences {
     rightClickToPaste: readBoolean(storage, preferenceKeys.rightClickToPaste, false),
     copyOnSelection: readBoolean(storage, preferenceKeys.copyOnSelection, true),
     checkUpdatesOnStartup: readBoolean(storage, preferenceKeys.checkUpdatesOnStartup, true),
+    terminalScrollbackLines: readTerminalScrollback(storage),
     collapsedFolders: readCollapsedFolders(storage),
     terminalPasteWarningsDisabled: readBoolean(storage, preferenceKeys.terminalPasteWarningsDisabled, false),
     themeName: readThemeName(storage),

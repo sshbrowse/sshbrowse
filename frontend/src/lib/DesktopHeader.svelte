@@ -22,6 +22,7 @@
     newSFTPShortcut,
     newConnectionShortcut,
     closeTabShortcut,
+    findTerminalShortcut,
     fontShortcuts,
     minimiseShortcut,
     quitShortcut,
@@ -33,6 +34,7 @@
     onclosetab,
     onfont,
     oneditaction,
+    onfindterminal,
     onsettings,
     settingsActive,
     onabout,
@@ -49,6 +51,7 @@
     newSFTPShortcut: string;
     newConnectionShortcut: string;
     closeTabShortcut: string;
+    findTerminalShortcut: string;
     fontShortcuts: {
       increase: string;
       decrease: string;
@@ -64,6 +67,7 @@
     onclosetab: () => void;
     onfont: (command: TerminalFontCommand) => void;
     oneditaction: (action: EditMenuAction) => void;
+    onfindterminal: () => void;
     onsettings: () => void;
     settingsActive: boolean;
     onabout: () => void;
@@ -125,12 +129,18 @@
           { label: "Copy", shortcut: "Ctrl+Shift+C", run: () => oneditaction("copy") },
           { label: "Paste", shortcut: "Ctrl+Shift+V", run: () => oneditaction("paste") },
           { label: "Select All", shortcut: "Ctrl+Shift+A", run: () => oneditaction("selectAll") },
+          { separator: true },
+          { label: "Find in Terminal…", shortcut: findTerminalShortcut, run: onfindterminal },
         ];
       case "view":
         return [
           { label: "Toggle Sidebar", shortcut: sidebarShortcut, run: () => onToggleSidebar() },
           { label: "Toggle Tiling Mode", run: onToggleTiling },
           { separator: true },
+          ...(showWindowControls ? [
+            { label: "Find in Terminal…", shortcut: findTerminalShortcut, run: onfindterminal },
+            { separator: true },
+          ] : []),
           { label: "Zoom In", shortcut: fontShortcuts.increase, run: () => onfont("increase") },
           { label: "Zoom Out", shortcut: fontShortcuts.decrease, run: () => onfont("decrease") },
           { label: "Reset Zoom", shortcut: fontShortcuts.reset, run: () => onfont("reset") },

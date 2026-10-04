@@ -56,6 +56,6 @@ Test GUI and installer changes on the affected native platform. A Linux build do
 
 ## Architecture
 
-The frontend uses Svelte, TypeScript, and xterm.js. `main.go` and `internal/app` contain the Wails integration. Other packages stay independent of Wails: `internal/session` owns processes and terminals; `internal/sshcmd` builds OpenSSH arguments; `internal/profile` stores connections; `internal/sshconfig` discovers importable aliases; and `internal/buildinfo` supplies version details.
+The frontend uses Svelte, TypeScript, and xterm.js with its official fit and search addons. `main.go` and `internal/app` contain the Wails integration. Other packages stay independent of Wails: `internal/session` owns processes and terminals; `internal/sshcmd` builds OpenSSH arguments; `internal/profile` stores connections; `internal/sshconfig` discovers importable aliases; and `internal/buildinfo` supplies version details.
 
 For headless Linux UI work, install Weston, then run `bash build/headless-preview.sh run` to start a private preview. In another shell, `bash build/headless-preview.sh shot <preview-dir> /tmp/sshbrowse.png` saves a screenshot. Keep the printed MCP token private and use separate worktrees for concurrent runs. Fedora 44 GNOME/Wayland remains the Linux acceptance target.

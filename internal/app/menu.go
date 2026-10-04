@@ -22,6 +22,8 @@ const (
 	EventMenuCheckForUpdates     = "menu:checkForUpdates"
 	EventMenuTerminalCopy        = "menu:terminalCopy"
 	EventMenuTerminalPaste       = "menu:terminalPaste"
+	EventMenuFindTerminal        = "menu:findTerminal"
+	EventMenuTerminalSearch      = "menu:terminalSearch"
 	EventMenuConnectionOpen      = "menu:connectionOpen"
 	EventMenuConnectionEdit      = "menu:connectionEdit"
 	EventMenuConnectionDuplicate = "menu:connectionDuplicate"
@@ -116,6 +118,10 @@ func buildNativeMenu(wailsApp *application.App, checkForUpdates func()) *applica
 	edit.AddRole(application.Copy)
 	edit.AddRole(application.Paste)
 	edit.AddRole(application.SelectAll)
+	edit.AddSeparator()
+	edit.Add("Find in Terminal…").SetAccelerator("CmdOrCtrl+f").OnClick(func(*application.Context) {
+		wailsApp.Event.Emit(EventMenuFindTerminal)
+	})
 
 	view := menu.AddSubmenu("View")
 	view.Add("Toggle Sidebar").SetAccelerator("CmdOrCtrl+b").OnClick(func(*application.Context) {
@@ -168,6 +174,10 @@ func registerContextMenus(wailsApp *application.App) {
 	})
 	terminalMenu.Add("Paste Clipboard").OnClick(func(context *application.Context) {
 		wailsApp.Event.Emit(EventMenuTerminalPaste, context.ContextMenuData())
+	})
+	terminalMenu.AddSeparator()
+	terminalMenu.Add("Find in Terminal…").OnClick(func(context *application.Context) {
+		wailsApp.Event.Emit(EventMenuTerminalSearch, context.ContextMenuData())
 	})
 	wailsApp.ContextMenu.Add("terminal", terminalMenu)
 }

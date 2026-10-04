@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   loadPreferences,
+  normalizeTerminalScrollback,
   preferenceKeys,
   saveCollapsedFolders,
   savePreference,
+  terminalScrollbackDefault,
+  terminalScrollbackMaximum,
+  terminalScrollbackMinimum,
 } from "../src/lib/storage.ts";
 
 function storage(values: Record<string, string> = {}) {
@@ -29,6 +33,7 @@ test("current preferences load correctly", () => {
     [preferenceKeys.tilingMode]: "true",
     [preferenceKeys.rightClickToPaste]: "true",
     [preferenceKeys.copyOnSelection]: "false",
+    [preferenceKeys.terminalScrollbackLines]: "5000",
     [preferenceKeys.collapsedFolders]: JSON.stringify(["prod", 42]),
     [preferenceKeys.terminalPasteWarningsDisabled]: "true",
     [preferenceKeys.themeName]: "oled",
@@ -46,6 +51,7 @@ test("current preferences load correctly", () => {
     rightClickToPaste: true,
     copyOnSelection: false,
     checkUpdatesOnStartup: true,
+    terminalScrollbackLines: 5000,
     collapsedFolders: { prod: true },
     terminalPasteWarningsDisabled: true,
     themeName: "oled",
@@ -65,6 +71,7 @@ test("missing preferences use defaults", () => {
     rightClickToPaste: false,
     copyOnSelection: true,
     checkUpdatesOnStartup: true,
+    terminalScrollbackLines: 1000,
     collapsedFolders: {},
     terminalPasteWarningsDisabled: false,
     themeName: "classic",
@@ -83,6 +90,7 @@ test("invalid preference values fall back to safe defaults", () => {
     [preferenceKeys.tilingMode]: "1",
     [preferenceKeys.rightClickToPaste]: "1",
     [preferenceKeys.copyOnSelection]: "1",
+    [preferenceKeys.terminalScrollbackLines]: "broken",
     [preferenceKeys.collapsedFolders]: "{broken",
     [preferenceKeys.terminalPasteWarningsDisabled]: "maybe",
     [preferenceKeys.themeName]: "custom",
@@ -100,6 +108,7 @@ test("invalid preference values fall back to safe defaults", () => {
     rightClickToPaste: false,
     copyOnSelection: true,
     checkUpdatesOnStartup: true,
+    terminalScrollbackLines: 1000,
     collapsedFolders: {},
     terminalPasteWarningsDisabled: false,
     themeName: "classic",
@@ -138,6 +147,35 @@ test("interface scale stays within supported bounds", () => {
   );
 });
 
+test("terminal scrollback normalizes finite values within supported bounds", () => {
+  assert.equal(terminalScrollbackDefault, 1000);
+  assert.equal(terminalScrollbackMinimum, 0);
+  assert.equal(terminalScrollbackMaximum, 50000);
+  for (const [value, expected] of [[0, 0], [12.4, 12], [12.5, 13], [-1, 0], [50001, 50000], [Number.MAX_VALUE, 50000]]) {
+    assert.equal(normalizeTerminalScrollback(value), expected);
+  }
+  for (const value of [NaN, Infinity, -Infinity]) {
+    assert.equal(normalizeTerminalScrollback(value), terminalScrollbackDefault);
+  }
+});
+
+test("terminal scrollback loads integer values and clamps their bounds", () => {
+  for (const [value, expected] of [["0", 0], ["50000", 50000], ["-10", 0], ["50001", 50000], [" 2000 ", 2000]] as const) {
+    assert.equal(loadPreferences(storage({ [preferenceKeys.terminalScrollbackLines]: value })).terminalScrollbackLines, expected);
+  }
+  for (const value of ["", " ", "broken", "NaN", "Infinity", "1.5", "0x100", "1e3", "null", "[]", "9".repeat(400)]) {
+    assert.equal(loadPreferences(storage({ [preferenceKeys.terminalScrollbackLines]: value })).terminalScrollbackLines, terminalScrollbackDefault);
+  }
+});
+
+test("terminal scrollback persists zero and the maximum", () => {
+  const preferences = storage();
+  for (const value of [terminalScrollbackMinimum, terminalScrollbackMaximum]) {
+    savePreference(preferences, preferenceKeys.terminalScrollbackLines, String(value));
+    assert.equal(loadPreferences(preferences).terminalScrollbackLines, value);
+  }
+});
+
 test("preference writes use the current namespace", () => {
   const preferences = storage();
 
@@ -165,6 +203,7 @@ test("preference reads fall back safely when storage is unavailable", () => {
     rightClickToPaste: false,
     copyOnSelection: true,
     checkUpdatesOnStartup: true,
+    terminalScrollbackLines: 1000,
     collapsedFolders: {},
     terminalPasteWarningsDisabled: false,
     themeName: "classic",

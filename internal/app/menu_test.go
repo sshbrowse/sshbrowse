@@ -27,7 +27,7 @@ func TestLinuxAndWindowsUseFrontendMenuAndRegisterContextMenus(t *testing.T) {
 	if !ok {
 		t.Fatal("terminal context menu is not registered")
 	}
-	for _, label := range []string{"Copy Selection", "Paste Clipboard"} {
+	for _, label := range []string{"Copy Selection", "Paste Clipboard", "Find in Terminal…"} {
 		if terminalMenu.FindByLabel(label) == nil {
 			t.Fatalf("terminal context menu item %q is missing", label)
 		}
@@ -99,5 +99,16 @@ func TestMacOSKeepsNativeEditRolesAndAddsSettings(t *testing.T) {
 	}
 	if menu.FindByLabel("Settings") != nil {
 		t.Fatal("macOS should not have a top-level Settings menu")
+	}
+	find := menu.FindByLabel("Find in Terminal…")
+	if find == nil {
+		t.Fatal("macOS Edit menu is missing Find in Terminal…")
+	}
+	findShortcut := "Ctrl+F"
+	if runtime.GOOS == "darwin" {
+		findShortcut = "Cmd+F"
+	}
+	if find.GetAccelerator() != findShortcut {
+		t.Fatalf("Find shortcut = %q, want %q", find.GetAccelerator(), findShortcut)
 	}
 }

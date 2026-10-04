@@ -22,6 +22,7 @@ SSHBrowse does not implement the SSH protocol itself, proxy SSH traffic through 
 - Import aliases from your OpenSSH config
 - Choose a saved connection as a jump host, or enter a raw ProxyJump route
 - Open SSH, SFTP, and local terminal sessions
+- Search terminal output and configure scrollback history
 - Work with tabs or tiled terminals
 - Send commands or live input to multiple sessions
 
@@ -46,6 +47,11 @@ After launching SSHBrowse, you can:
 - Create a saved connection
 - Import aliases with **Shell > Import from SSH Config…**
 - Enter `user@host:port` directly in the new-tab picker
+
+Use **Find in Terminal…** in the application or terminal context menu to search
+the selected pane (Cmd+F on macOS, Ctrl+Shift+F on Linux and Windows). Set retained
+history under **Settings > Terminal > Scrollback lines**. Search may be unavailable
+for very long wrapped output; clear the terminal or reduce scrollback to resume.
 
 ## Help and contributing
 

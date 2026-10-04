@@ -5,7 +5,7 @@
   import X from "@lucide/svelte/icons/x";
   import type { TerminalColors, TerminalFontName, ThemeName } from "./appearance";
   import type { UpdateInfo } from "./menuEvents";
-  import type { UiSize } from "./storage";
+  import { terminalScrollbackMinimum, terminalScrollbackMaximum, type UiSize } from "./storage";
   import { canCheckForUpdates } from "./updates";
 
   let {
@@ -17,6 +17,7 @@
     terminalFontName,
     rightClickToPaste,
     copyOnSelection,
+    terminalScrollbackLines,
     sidebarWidth,
     updateInfo,
     updateStatus,
@@ -39,6 +40,7 @@
     onterminalfontchange,
     onrightclickpastechange,
     oncopyselectionchange,
+    onterminalscrollbackchange,
     onclose,
   }: {
     themeName: ThemeName;
@@ -49,6 +51,7 @@
     terminalFontName: TerminalFontName;
     rightClickToPaste: boolean;
     copyOnSelection: boolean;
+    terminalScrollbackLines: number;
     sidebarWidth: number;
     updateInfo: UpdateInfo | null;
     updateStatus: string;
@@ -71,6 +74,7 @@
     onterminalfontchange: (font: TerminalFontName) => void;
     onrightclickpastechange: (enabled: boolean) => void;
     oncopyselectionchange: (enabled: boolean) => void;
+    onterminalscrollbackchange: (lines: number) => void;
     onclose: () => void;
   } = $props();
 
@@ -93,6 +97,12 @@
   let selectedSection = $state<Section>("general");
   let pageHeading: HTMLHeadingElement;
   let pageContent: HTMLElement;
+  // Apply explicitly: lowering the live limit discards retained terminal output.
+  let scrollbackDraft = $state<number | undefined>(undefined);
+
+  $effect(() => {
+    scrollbackDraft = terminalScrollbackLines;
+  });
 
   onMount(() => {
     pageHeading.focus();
@@ -108,6 +118,14 @@
   function selectSection(section: Section) {
     selectedSection = section;
     pageContent.scrollTop = 0;
+  }
+
+  function applyScrollback(event: SubmitEvent) {
+    event.preventDefault();
+    if (scrollbackDraft !== undefined && Number.isInteger(scrollbackDraft)
+      && scrollbackDraft >= terminalScrollbackMinimum && scrollbackDraft <= terminalScrollbackMaximum) {
+      onterminalscrollbackchange(scrollbackDraft);
+    }
   }
 </script>
 
@@ -268,9 +286,28 @@
             <section aria-labelledby="terminal-heading">
               <div class="section-heading">
                 <h2 id="terminal-heading">Terminal behavior</h2>
-                <p>Choose how selection and mouse clicks work in live terminals.</p>
+                <p>Choose how live terminals retain output and handle input.</p>
               </div>
               <div class="setting-group">
+                <div class="setting-row">
+                  <div>
+                    <label for="terminal-scrollback-lines"><strong>Scrollback lines</strong></label>
+                    <span id="scrollback-description">Applies to all open and future terminals. Lines retained above the visible terminal. 0 disables history; maximum 50,000.</span>
+                  </div>
+                  <form class="scrollback-control" onsubmit={applyScrollback}>
+                    <input
+                      id="terminal-scrollback-lines"
+                      type="number"
+                      min={terminalScrollbackMinimum}
+                      max={terminalScrollbackMaximum}
+                      step="1"
+                      required
+                      aria-describedby="scrollback-description scrollback-warning"
+                      bind:value={scrollbackDraft}
+                    />
+                    <button class="update-button" type="submit" disabled={scrollbackDraft === undefined || scrollbackDraft === terminalScrollbackLines}>Apply</button>
+                  </form>
+                </div>
                 <div class="setting-row">
                   <div><strong>Copy selection automatically</strong><span>Copy highlighted terminal text to the clipboard</span></div>
                   <button class="switch" type="button" role="switch" aria-label="Copy selection automatically" aria-checked={copyOnSelection} onclick={() => oncopyselectionchange(!copyOnSelection)}><span></span></button>
@@ -280,6 +317,7 @@
                   <button class="switch" type="button" role="switch" aria-label="Right-click to paste" aria-checked={rightClickToPaste} onclick={() => onrightclickpastechange(!rightClickToPaste)}><span></span></button>
                 </div>
               </div>
+              <p id="scrollback-warning" class="hint">Lowering this limit removes the oldest retained lines in every open terminal. Removed output cannot be recovered.</p>
             </section>
           {/if}
         </div>
@@ -412,6 +450,8 @@
   .update-status { color: var(--text-primary); }
   .update-status.error { color: var(--status-error); }
   .segmented, .stepper { display: flex; flex: none; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--input-surface); }
+  .scrollback-control { display: flex; align-items: center; gap: 8px; }
+  .scrollback-control input { width: 110px; min-height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--input-surface); color: var(--text-primary); font: inherit; }
   .segmented button, .stepper button { min-height: 34px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text-secondary); font: inherit; cursor: default; }
   .segmented button:hover, .stepper button:hover:not(:disabled) { background: var(--control-hover); color: var(--text-primary); }
   .segmented button.active { background: var(--selection); color: var(--text-primary); }
