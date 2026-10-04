@@ -9,6 +9,7 @@
   import X from "@lucide/svelte/icons/x";
   import { Browser, Clipboard, Events, Window as WailsWindow } from "@wailsio/runtime";
   import * as Sessions from "../bindings/sshbrowse/internal/app/sessions";
+  import * as Workspaces from "../bindings/sshbrowse/internal/app/workspaces";
   import type { Connection } from "../bindings/sshbrowse/internal/profile/models";
   import Sidebar from "./lib/Sidebar.svelte";
   import TabBar from "./lib/TabBar.svelte";
@@ -22,6 +23,8 @@
   import CloseConfirmDialog from "./lib/CloseConfirmDialog.svelte";
   import SettingsPage from "./lib/SettingsPage.svelte";
   import UpdateNotice from "./lib/UpdateNotice.svelte";
+  import WorkspaceDialog from "./lib/WorkspaceDialog.svelte";
+  import { appendWorkspace, captureWorkspace, createWorkspaceWriter, workspaceAvailability, type SavedLayout, type SavedWorkspace } from "./lib/savedWorkspaces";
   import { canCheckForUpdates, claimStartupUpdateCheck, githubReleaseURL, type UpdateCheckResult, type UpdateRelease } from "./lib/updates";
   import type { TerminalColors, TerminalFontName, ThemeName } from "./lib/appearance";
   import {
@@ -135,6 +138,28 @@
   let activeId = $state<number | null>(null);
   let nextTabId = 1;
   let nextSessionId = 1;
+  let savedWorkspaces = $state<SavedWorkspace[]>([]);
+  let recovery = $state<SavedLayout | null>(null);
+  let recoveryUnavailable = $state(false);
+  let workspacesReady = $state(false);
+  let workspaceDialogOpen = $state(false);
+  let reviewRecovery = $state(false);
+  let workspaceDialog = $state<{ dismiss: () => void }>();
+  let workspaceError = $state("");
+  const currentLayout = $derived(captureWorkspace({ tabs, sessions, activeId }));
+  const workspaceWriter = createWorkspaceWriter(Workspaces.UpdateCurrent, (error) => {
+    workspaceError = `Could not save restart recovery: ${errorMessage(error)}`;
+  });
+  let lastWorkspaceJSON = "";
+  $effect(() => {
+    if (!workspacesReady || recovery !== null || recoveryUnavailable) return;
+    const layout = currentLayout;
+    const serialized = JSON.stringify(layout);
+    if (serialized !== lastWorkspaceJSON) {
+      lastWorkspaceJSON = serialized;
+      workspaceWriter.push(layout);
+    }
+  });
   let activeTab = $derived(tabs.find((tab) => tab.id === activeId) ?? null);
   let activeWorkspace = $derived(activeTab?.kind === "workspace" ? activeTab : null);
   let activeTileGrid = $derived(activeWorkspace ? tileGrid(activeWorkspace.sessionIds.length) : null);
@@ -276,7 +301,72 @@
   }
 
   function modalDialogOpen(): boolean {
-    return editing !== null || moving !== null || folderAction !== null || picking || importing !== null || closeConfirmation !== null || settingsOpen || broadcastConfirming || terminalPasteConfirmingSessionId !== null;
+    return workspaceDialogOpen || editing !== null || moving !== null || folderAction !== null || picking || importing !== null || closeConfirmation !== null || settingsOpen || broadcastConfirming || terminalPasteConfirmingSessionId !== null;
+  }
+
+  async function loadWorkspaces() {
+    const loaded = await Workspaces.Load();
+    // The store validates kinds, positions, and arrays before returning layouts.
+    savedWorkspaces = (loaded.workspaces ?? []) as SavedWorkspace[];
+    recovery = loaded.recovery as SavedLayout | null;
+    recoveryUnavailable = loaded.recoveryUnavailable;
+    workspaceError = loaded.warning;
+    workspacesReady = true;
+  }
+
+  function openWorkspaces(restore = false) {
+    if (modalDialogOpen() || scanningImport || broadcastSending || !workspacesReady) return;
+    closeBroadcastBar(false);
+    rememberDialogFocus();
+    reviewRecovery = restore;
+    workspaceDialogOpen = true;
+  }
+
+  async function saveWorkspace(name: string) {
+    await Workspaces.Save(name, currentLayout);
+    await loadWorkspaces();
+  }
+
+  async function renameWorkspace(id: string, name: string) {
+    await Workspaces.Rename(id, name);
+    await loadWorkspaces();
+  }
+
+  async function deleteWorkspace(id: string) {
+    await Workspaces.Delete(id);
+    await loadWorkspaces();
+  }
+
+  async function openSavedWorkspace(layout: SavedLayout, restoring = false) {
+    // Refresh immediately before starting sessions, so edits and deletions apply.
+    const confirmedAvailability = workspaceAvailability(layout, connections.list);
+    if (layout.tabs.some((tab) => tab.panes.some((pane) => pane.kind === "ssh" || pane.kind === "sftp"))) {
+      await loadConnections();
+    }
+    if (confirmedAvailability !== workspaceAvailability(layout, connections.list)) {
+      throw new Error("Available connections changed. Review the updated session counts and confirm again.");
+    }
+    const next = appendWorkspace(workspaceState(), layout, $state.snapshot(connections.list), nextTabId, nextSessionId);
+    if (restoring) {
+      await workspaceWriter.flush();
+      // A failed write leaves the recovery offer and current sessions intact.
+      await Workspaces.ResolveRecovery(captureWorkspace(next));
+      recovery = null;
+    }
+    applyWorkspaceState(next);
+    nextTabId = next.nextTabId;
+    nextSessionId = next.nextSessionId;
+    terminalFocusRequest++;
+  }
+
+  async function restoreWorkspace() {
+    if (recovery) await openSavedWorkspace(recovery, true);
+  }
+
+  async function discardRecovery() {
+    await workspaceWriter.flush();
+    await Workspaces.ResolveRecovery(currentLayout);
+    await loadWorkspaces();
   }
 
   function stopLiveBroadcast(reason?: string) {
@@ -605,6 +695,10 @@
     if (session === null) {
       return;
     }
+    if (session.unavailable) {
+      operationError = "This pane has no available saved connection for SFTP.";
+      return;
+    }
     if (session.connection === null) {
       operationError = "SFTP needs an SSH connection; the focused session is a local shell.";
       return;
@@ -675,7 +769,9 @@
   }
 
   function handleMenuCloseTab() {
-    if (settingsOpen) {
+    if (workspaceDialogOpen) {
+      workspaceDialog?.dismiss();
+    } else if (settingsOpen) {
       closeSettings();
     } else if (closeConfirmation) {
       closeConfirmationDialog?.dismiss();
@@ -1317,8 +1413,14 @@
     updateWindowsChrome(themeName);
 
     loadConnections()
+      .catch((error) => {
+        operationError = `Could not read saved connections: ${errorMessage(error)}`;
+      })
+      .then(loadWorkspaces)
       .then(() => openSSHConfigImport(true))
-      .catch(console.error);
+      .catch((error) => {
+        workspaceError = `Could not read workspaces: ${errorMessage(error)}`;
+      });
 
     // While a dialog is up, Close Tab dismisses it and other shortcuts wait.
     const offNewTab = Events.On("menu:newTab", () => {
@@ -1571,6 +1673,9 @@
             ondrop={tileTab}
           />
         </div>
+        <button class="linux-toolbar-action" onclick={() => openWorkspaces()} disabled={!workspacesReady} title="Save or open workspaces">
+          <Bookmark size={16} /><span>Workspaces</span>
+        </button>
         <button
           class="linux-toolbar-action"
           class:active={tilingMode}
@@ -1625,6 +1730,9 @@
         onnew={(shiftKey) => openPicker(shiftKey)}
         ondrop={tileTab}
       />
+      <button class="toolbar-action" onclick={() => openWorkspaces()} disabled={!workspacesReady} title="Save or open workspaces">
+        <Bookmark size={16} /><span class="toolbar-label">Workspaces</span>
+      </button>
       <button
         class="toolbar-action"
         class:active={tilingMode}
@@ -1651,6 +1759,18 @@
         <Radio size={16} />
         <span class="toolbar-label">Broadcast</span>
       </button>
+      </div>
+    {/if}
+    {#if recovery || recoveryUnavailable}
+      <div class="recovery-notice" role="status">
+        <span>{recoveryUnavailable ? "Previous recovery data could not be read. Review it to discard the damaged data." : "Previous workspace available. Sessions start only when you restore it."}</span>
+        <button onclick={() => openWorkspaces(true)}>Review recovery…</button>
+      </div>
+    {/if}
+    {#if workspaceError}
+      <div class="operation-error" role="alert">
+        <span>{workspaceError}</span>
+        <button aria-label="Dismiss workspace error" onclick={() => (workspaceError = "")}><X size={16} /></button>
       </div>
     {/if}
     {#if operationError}
@@ -1749,7 +1869,13 @@
               >
             </div>
           {/if}
-          {#if terminalPaneComponent}
+          {#if session.unavailable}
+            <div class="terminal-placeholder" role="status">
+              <span>{session.unavailable.connectionId
+                ? "This saved connection is missing. Restore the saved connection, then open the workspace again, or close this pane."
+                : "This connection was not saved. Save connections before saving a workspace, or close this pane."}</span>
+            </div>
+          {:else if terminalPaneComponent}
             {@const TerminalPane = terminalPaneComponent}
             <TerminalPane
               sessionId={session.id}
@@ -1870,6 +1996,24 @@
     onsave={save}
     ondelete={deleteConnection}
     onclose={() => { editing = null; closeDialog(); }}
+  />
+{/if}
+{#if workspaceDialogOpen}
+  <WorkspaceDialog
+    bind:this={workspaceDialog}
+    workspaces={savedWorkspaces}
+    {recovery}
+    {recoveryUnavailable}
+    current={currentLayout}
+    connections={connections.list}
+    {reviewRecovery}
+    onsave={saveWorkspace}
+    onrename={renameWorkspace}
+    ondelete={deleteWorkspace}
+    onopen={openSavedWorkspace}
+    onrestore={restoreWorkspace}
+    ondiscard={discardRecovery}
+    onclose={() => { workspaceDialogOpen = false; closeDialog(); }}
   />
 {/if}
 {#if moving}
@@ -2040,6 +2184,28 @@
     background: var(--status-error-surface);
     color: var(--text-primary);
     font: var(--ui-font-small) var(--font-ui);
+  }
+  .recovery-notice {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    font: var(--ui-font-small) var(--font-ui);
+    zoom: var(--interface-scale);
+  }
+  .recovery-notice button {
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--text-primary);
+    font: inherit;
+    white-space: nowrap;
   }
   .operation-error button {
     display: grid;

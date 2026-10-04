@@ -24,6 +24,7 @@ SSHBrowse does not implement the SSH protocol itself, proxy SSH traffic through 
 - Open SSH, SFTP, and local terminal sessions
 - Search terminal output and configure scrollback history
 - Work with tabs or tiled terminals
+- Save named workspaces and recover your tabs and tiles after restarting
 - Send commands or live input to multiple sessions
 
 ## Platforms
@@ -54,6 +55,14 @@ Use **Find in Terminal…** in the application or terminal context menu to searc
 the selected pane (Cmd+F on macOS, Ctrl+Shift+F on Linux and Windows). Set retained
 history under **Settings > Terminal > Scrollback lines**. Search may be unavailable
 for very long wrapped output; clear the terminal or reduce scrollback to resume.
+
+Use **Workspaces** in the session toolbar to save, open, rename, or delete a named
+workspace. Opening or restoring adds tabs and starts sessions only after you
+confirm; existing sessions stay open. Connections use their current saved
+settings. Save quick-connect hosts as connections first: workspace files contain
+only saved connection references and layout metadata. Missing or unsaved
+connections appear as unavailable panes. The restart recovery offer remains until
+you restore or discard it, even if you open other sessions or restart again.
 
 ## Help and contributing
 
