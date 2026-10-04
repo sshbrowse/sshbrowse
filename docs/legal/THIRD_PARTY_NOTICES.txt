@@ -277,7 +277,7 @@ PERFORMANCE OF THIS SOFTWARE.
 
 ## Frontend production code
 
-## @lucide/svelte (1.48.0)
+## @lucide/svelte (1.49.0)
 License: ISC
 
 ISC License
