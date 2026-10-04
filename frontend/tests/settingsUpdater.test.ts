@@ -94,10 +94,10 @@ test("Update notice links to the exact release and offers downloads only for sup
     const path = join(directory, "UpdateNotice.mjs");
     writeFileSync(path, compiled);
     const { default: UpdateNotice } = await import(pathToFileURL(path).href);
-    const release = { version: "0.2.0", releaseURL: "https://github.com/osmocomet/sshbrowse/releases/tag/v0.2.0" };
+    const release = { version: "0.2.0", releaseURL: "https://github.com/sshbrowse/sshbrowse/releases/tag/v0.2.0" };
     const supported = render(UpdateNotice, { props: { release, canDownload: true } }).body;
     assert.match(supported, /SSHBrowse 0\.2\.0 is available/);
-    assert.match(supported, /href="https:\/\/github.com\/osmocomet\/sshbrowse\/releases\/tag\/v0.2.0"/);
+    assert.match(supported, /href="https:\/\/github.com\/sshbrowse\/sshbrowse\/releases\/tag\/v0.2.0"/);
     assert.match(supported, /Download update/);
     assert.match(supported, /Later/);
     assert.doesNotMatch(supported, /Restart to update/);

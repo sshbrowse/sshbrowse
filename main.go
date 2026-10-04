@@ -75,7 +75,7 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 		Linux: application.LinuxOptions{
-			ApplicationID: "io.github.osmocomet.sshbrowse",
+			ApplicationID: "io.github.sshbrowse.sshbrowse",
 		},
 		Windows: application.WindowsOptions{
 			WebviewUserDataPath: webviewUserDataPath(),

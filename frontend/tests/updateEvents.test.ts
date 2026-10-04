@@ -44,7 +44,7 @@ function app(storageUnavailable = false) {
   }
   return { state, send, emitted };
 }
-const release = { automatic: true, checked: true, version: "2.0.0", releaseURL: "https://github.com/osmocomet/sshbrowse/releases/tag/v2.0.0", error: "" };
+const release = { automatic: true, checked: true, version: "2.0.0", releaseURL: "https://github.com/sshbrowse/sshbrowse/releases/tag/v2.0.0", error: "" };
 
 test("startup info schedules one metadata check, honors opt-out, and survives denied localStorage", () => {
   for (const unavailable of [false, true]) {
