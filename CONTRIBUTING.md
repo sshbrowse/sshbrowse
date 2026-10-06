@@ -25,7 +25,7 @@ Install Git, the Go version in `go.mod`, Node.js 24 with npm, and the Wails CLI 
 ```sh
 git clone https://github.com/sshbrowse/sshbrowse.git
 cd sshbrowse
-go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.26
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
 wails3 task dev
 ```
 
