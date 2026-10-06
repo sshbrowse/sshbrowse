@@ -8,6 +8,10 @@ export const terminalSearchRefreshDelay = 1000;
 const terminalSearchWrappedLineLimit = 256;
 const terminalSearchScannedCellLimit = 8 * 1024 * 1024;
 
+function escapeSearchLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function delegatedProperty(target: object, property: string | symbol): unknown {
   const value = Reflect.get(target, property, target);
   return typeof value === "function" ? value.bind(target) : value;
@@ -282,8 +286,12 @@ export class TerminalSearchSession {
           this.callbacks.onResults(this.result);
         });
       }
+      // Literal mode lowercases whole lines, shifting offsets when Unicode
+      // casing expands a character. Escaped regex matches the original text.
+      const pattern = escapeSearchLiteral(this.query);
       const options: ISearchOptions = {
         caseSensitive: this.caseSensitive,
+        regex: true,
         incremental,
         decorations: {
           matchBackground: "#665521",
@@ -298,17 +306,17 @@ export class TerminalSearchSession {
         // A fresh addon expands to the right before its first reverse search.
         // Prime the query without moving the original anchor for Previous.
         if (direction === "previous") {
-          this.selectionGuard.preserveSelection(() => this.addon!.findNext(this.query, { ...options, incremental: true }));
-        } else if (this.selectionMatchesQuery()) {
+          this.selectionGuard.preserveSelection(() => this.addon!.findNext(pattern, { ...options, incremental: true }));
+        } else if (this.selectionMatchesQuery(pattern)) {
           // Next advances an unchanged match, but must not skip a replacement
           // when the previously selected text was overwritten.
-          this.addon!.findNext(this.query, { ...options, incremental: true });
+          this.addon!.findNext(pattern, { ...options, incremental: true });
         }
       }
       this.dirty = false;
       return direction === "previous"
-        ? this.addon!.findPrevious(this.query, options)
-        : this.addon!.findNext(this.query, options);
+        ? this.addon!.findPrevious(pattern, options)
+        : this.addon!.findNext(pattern, options);
     } catch {
       this.fail("addon", "Could not search terminal output.");
       return false;
@@ -325,10 +333,10 @@ export class TerminalSearchSession {
     this.callbacks.onError(message);
   }
 
-  private selectionMatchesQuery(): boolean {
+  private selectionMatchesQuery(pattern: string): boolean {
     const selection = this.terminal.getSelection();
     return this.query !== "" && (this.caseSensitive
       ? selection === this.query
-      : selection.toLowerCase() === this.query.toLowerCase());
+      : new RegExp(pattern, "i").exec(selection)?.[0] === selection);
   }
 }
