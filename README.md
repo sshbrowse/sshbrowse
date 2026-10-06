@@ -42,7 +42,7 @@ For release downloads, check the architecture and compare the SHA-256 hash with 
 
 Download the latest package from [Releases](https://github.com/sshbrowse/sshbrowse/releases).
 
-Linux release notes include manual installation steps and an optional installer script.
+See [Linux installation](docs/linux.md) for package and per-user installation options.
 
 After launching SSHBrowse, you can:
 
