@@ -89,6 +89,27 @@ function keyEvent(overrides: Partial<KeyboardEvent> = {}) {
   };
 }
 
+test("literal search preserves buffer columns after Unicode lowercase expansion", async () => {
+  const search = searchTerminal();
+  try {
+    await search.write("İfoo.bar İFOO.BAR fooXbar");
+    assert.equal(search.session.find("foo.bar", false, "next", true), true);
+    assert.equal(search.results.at(-1)?.resultCount, 2);
+    assert.deepEqual(search.terminal.getSelectionPosition(), { start: { x: 1, y: 0 }, end: { x: 8, y: 0 } });
+    assert.equal(search.terminal.getSelection(), "foo.bar");
+    assert.equal(search.session.find("foo.bar", false, "next"), true);
+    assert.deepEqual(search.terminal.getSelectionPosition(), { start: { x: 10, y: 0 }, end: { x: 17, y: 0 } });
+    assert.equal(search.terminal.getSelection(), "FOO.BAR");
+    assert.equal(search.session.find("foo.bar", false, "previous"), true);
+    assert.equal(search.terminal.getSelection(), "foo.bar");
+    assert.equal(search.session.find("foo.bar", true, "next", true), true);
+    assert.equal(search.results.at(-1)?.resultCount, 1);
+    assert.equal(search.terminal.getSelection(), "foo.bar");
+  } finally {
+    search.dispose();
+  }
+});
+
 test("find input uses Enter and Shift+Enter to navigate and Escape to close", () => {
   assert.equal(terminalSearchCommandFor(keyEvent()), "next");
   assert.equal(terminalSearchCommandFor(keyEvent({ shiftKey: true })), "previous");
