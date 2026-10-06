@@ -112,7 +112,7 @@ LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## github.com/wailsapp/wails/v3 (v3.0.0-beta.26)
+## github.com/wailsapp/wails/v3 (v3.0.0-beta.28)
 License: MIT
 
 MIT License
@@ -230,7 +230,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## Wails bundled go-common-file-dialog (Windows) (v3.0.0-beta.26)
+## Wails bundled go-common-file-dialog (Windows) (v3.0.0-beta.28)
 License: MIT
 
 MIT License
@@ -255,7 +255,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Wails bundled WebView2Loader (Windows) (v3.0.0-beta.26)
+## Wails bundled WebView2Loader (Windows) (v3.0.0-beta.28)
 License: ISC
 
 ISC License (ISC)
@@ -324,7 +324,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## @wailsio/runtime (3.0.0-beta.26)
+## @wailsio/runtime (3.0.0-beta.28)
 License: MIT (Wails v3 root LICENSE)
 
 MIT License
@@ -492,7 +492,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-## Wails internal/assetserver/ringqueue.go (v3.0.0-beta.26)
+## Wails internal/assetserver/ringqueue.go (v3.0.0-beta.28)
 License: MIT
 
 The MIT License (MIT)
@@ -517,7 +517,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Wails pkg/w32 derived from AllenDang/w32 (v3.0.0-beta.26)
+## Wails pkg/w32 derived from AllenDang/w32 (v3.0.0-beta.28)
 License: BSD 3-Clause
 
 Copyright (c) 2010-2012 The w32 Authors. All rights reserved.
@@ -542,7 +542,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## Wails pkg/w32 derived from Winc (v3.0.0-beta.26)
+## Wails pkg/w32 derived from Winc (v3.0.0-beta.28)
 License: MIT
 
 The Wails source files also carry these notices:
@@ -635,7 +635,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## @wailsio/runtime dist/nanoid.js (v3.0.0-beta.26; nanoid)
+## @wailsio/runtime dist/nanoid.js (v3.0.0-beta.28; nanoid)
 License: MIT
 
 The MIT License (MIT)
@@ -659,7 +659,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-## @wailsio/runtime dist/callable.js (v3.0.0-beta.26; is-callable)
+## @wailsio/runtime dist/callable.js (v3.0.0-beta.28; is-callable)
 License: MIT
 
 The MIT License (MIT)
@@ -684,7 +684,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## @wailsio/runtime dist/utils.js (v3.0.0-beta.26; HTMX-derived code)
+## @wailsio/runtime dist/utils.js (v3.0.0-beta.28; HTMX-derived code)
 License: BSD 2-Clause
 
 This technique for proper load detection is taken from HTMX:
@@ -715,7 +715,7 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## Vite helper code (v8.3.1)
+## Vite helper code (v8.3.3)
 License: MIT
 
 MIT License
