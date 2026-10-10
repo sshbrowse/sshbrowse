@@ -13,6 +13,7 @@ test("Settings shows check, download, retry, and restart controls for each updat
   // Icons do not affect the update controls; replace them so Node can render
   // this component without a loader for Lucide's .svelte files.
   const code = compiled
+    .replace(/^import BackupPanel from .*;$/gm, "const BackupPanel = () => {};")
     .replace(/^import (ArrowLeft|Check|X) from .*;$/gm, "const $1 = () => {};")
     .replace('from "./updates"', `from ${JSON.stringify(new URL("../src/lib/updates.ts", import.meta.url).href)}`)
     .replace('from "./storage"', `from ${JSON.stringify(new URL("../src/lib/storage.ts", import.meta.url).href)}`);
@@ -22,6 +23,8 @@ test("Settings shows check, download, retry, and restart controls for each updat
     writeFileSync(path, code);
     const { default: SettingsPage } = await import(pathToFileURL(path).href);
     const props = {
+      sessionsOpen: false,
+      backupBusy: false,
       themeName: "classic",
       terminalColors: "neutral",
       uiSize: "normal",

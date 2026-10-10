@@ -99,6 +99,7 @@ func main() {
 	quitGuard = app.NewQuitGuard(wailsApp, sessions)
 	wailsApp.RegisterService(application.NewService(sessions))
 	wailsApp.RegisterService(application.NewService(app.NewConnections(store, wailsApp)))
+	wailsApp.RegisterService(application.NewService(app.NewBackup(store, storePath, wailsApp)))
 	_, updateCoordinator, updateErr := app.ConfigureUpdater(wailsApp, executablePath, quitGuard)
 	if updateErr != nil {
 		log.Printf("Configure updater: %v", updateErr)

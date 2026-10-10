@@ -344,7 +344,7 @@ jobs:
 
           - macOS: open `SSHBrowse-macOS-universal.dmg`, then drag **SSHBrowse** (`sshbrowse.app`) to **Applications**.
           - Windows 11 x64: run `SSHBrowse-Windows-x64-Setup.exe`. Microsoft Edge WebView2 Runtime is required and is normally included with Windows 11.
-          - Linux: install the DEB/RPM package for your distribution, or use the per-user binary installation for in-app updates. See [Linux installation](https://github.com/sshbrowse/sshbrowse/blob/main/docs/linux.md).
+          - Linux: install the DEB/RPM package for your distribution, or use the per-user binary installation for in-app updates. See [Linux installation](https://github.com/sshbrowse/sshbrowse/blob/main/docs/installation.md).
 
           > macOS is currently ad-hoc signed and not notarized. Windows artifacts are unsigned. macOS Gatekeeper or Windows SmartScreen may therefore show a warning on first launch.
 

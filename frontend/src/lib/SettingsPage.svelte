@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import BackupPanel from "./BackupPanel.svelte";
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import Check from "@lucide/svelte/icons/check";
   import X from "@lucide/svelte/icons/x";
@@ -9,6 +10,10 @@
   import { canCheckForUpdates } from "./updates";
 
   let {
+    sessionsOpen,
+    backupBusy,
+    onbackupcomplete,
+    onbackupbusychange,
     themeName,
     terminalColors,
     uiSize,
@@ -43,6 +48,10 @@
     onterminalscrollbackchange,
     onclose,
   }: {
+    sessionsOpen: boolean;
+    backupBusy: boolean;
+    onbackupcomplete: (preferencesChanged: boolean) => Promise<void>;
+    onbackupbusychange: (busy: boolean) => void;
     themeName: ThemeName;
     terminalColors: TerminalColors;
     uiSize: UiSize;
@@ -87,13 +96,14 @@
     { name: "contrast", label: "High Contrast", description: "Clear edges · bright text" },
   ];
 
-  type Section = "general" | "appearance" | "terminal";
+  type Section = "general" | "appearance" | "terminal" | "data";
   const sectionLabels: Record<Section, string> = {
     general: "General",
     appearance: "Appearance",
     terminal: "Terminal",
+    data: "Backup & restore",
   };
-  const sections: Section[] = ["general", "appearance", "terminal"];
+  const sections: Section[] = ["general", "appearance", "terminal", "data"];
   let selectedSection = $state<Section>("general");
   let pageHeading: HTMLHeadingElement;
   let pageContent: HTMLElement;
@@ -139,19 +149,23 @@
         {#each sections as section}
           <button
             type="button"
+            disabled={backupBusy}
             class:active={selectedSection === section}
             aria-current={selectedSection === section ? "page" : undefined}
             onclick={() => selectSection(section)}
           >{sectionLabels[section]}</button>
         {/each}
       </div>
-      <button class="back" type="button" onclick={onclose}><ArrowLeft size={16} /> Back to workspace</button>
+      <button class="back" type="button" disabled={backupBusy} onclick={onclose}><ArrowLeft size={16} /> Back to workspace</button>
     </nav>
     <div class="settings-main">
-      <button class="close" type="button" aria-label="Close Settings" title="Close Settings" onclick={onclose}><X size={16} /></button>
+      <button class="close" type="button" disabled={backupBusy} aria-label="Close Settings" title="Close Settings" onclick={onclose}><X size={16} /></button>
       <main bind:this={pageContent} class="page-content">
-        <div class="page-inner">
+        <div class="page-inner" class:backup-page={selectedSection === "data"}>
           <h1 bind:this={pageHeading} tabindex="-1">{sectionLabels[selectedSection]}</h1>
+          {#if selectedSection === "data"}
+            <BackupPanel {sessionsOpen} oncomplete={onbackupcomplete} onbusychange={onbackupbusychange} />
+          {/if}
           {#if selectedSection === "general"}
             <section aria-labelledby="updates-heading">
               <div class="section-heading">
@@ -383,6 +397,8 @@
   .close:hover { background: var(--control-hover); color: var(--text-primary); }
   .page-content { flex: 1; min-height: 0; overflow-y: auto; padding: 52px clamp(24px, 4vw, 64px) 80px; }
   .page-inner { max-width: 960px; margin: 0 auto; }
+  .page-inner.backup-page { max-width: 760px; }
+  .backup-page h1 { margin-bottom: 12px; }
   h1 { margin: 0 0 28px; font-size: var(--ui-font-title); font-weight: 500; line-height: 1.25; letter-spacing: -0.02em; }
   h1:focus { outline: none; }
   .page-inner section + section { margin-top: 32px; }

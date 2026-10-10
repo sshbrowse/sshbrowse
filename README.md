@@ -42,18 +42,17 @@ For release downloads, check the architecture and compare the SHA-256 hash with 
 
 Download the latest package from [Releases](https://github.com/sshbrowse/sshbrowse/releases).
 
-See [Linux installation](docs/linux.md) for package and per-user installation options.
+See [Linux installation](docs/installation.md) for package and per-user installation options.
 
 After launching SSHBrowse, you can:
 
 - Create a saved connection
 - Import aliases with **Shell > Import from SSH Config…**
+- Move saved connections and preferences with **Settings > Backup & restore**
 - Enter `user@host:port` directly in the new-tab picker
 
-Use **Find in Terminal…** in the application or terminal context menu to search
-the selected pane (Cmd+F on macOS, Ctrl+Shift+F on Linux and Windows). Set retained
-history under **Settings > Terminal > Scrollback lines**. Search may be unavailable
-for very long wrapped output; clear the terminal or reduce scrollback to resume.
+See the [usage guide](docs/usage.md) for connections, sessions, terminal tools,
+and moving your setup between computers.
 
 ## Help and contributing
 
