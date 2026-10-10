@@ -239,8 +239,6 @@ jobs:
           test -f "bin/sshbrowse_${VERSION}_amd64.deb"
           test -f "bin/sshbrowse-${VERSION}.x86_64.rpm"
           test -f bin/SSHBrowse-Linux-x86_64
-          test -f bin/sshbrowse.png
-          test -x bin/install.sh
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v7
@@ -250,8 +248,6 @@ jobs:
             bin/sshbrowse_*_amd64.deb
             bin/sshbrowse-*.x86_64.rpm
             bin/SSHBrowse-Linux-x86_64
-            bin/sshbrowse.png
-            bin/install.sh
           if-no-files-found: error
           retention-days: 14
 
@@ -265,6 +261,11 @@ jobs:
       contents: read
 
     steps:
+      - name: Check out the build source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+
       - name: Download platform artifacts
         uses: actions/download-artifact@v8
         with:
@@ -277,12 +278,15 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t artifacts < <(find dist -maxdepth 1 -type f -printf '%f\n' | sort)
-          if (( ${#artifacts[@]} != 9 )); then
-            printf 'Expected 9 release artifacts, found %d:\n' "${#artifacts[@]}" >&2
+          if (( ${#artifacts[@]} != 7 )); then
+            printf 'Expected 7 release artifacts, found %d:\n' "${#artifacts[@]}" >&2
             printf '%s\n' "${artifacts[@]}" >&2
             exit 1
           fi
           (cd dist && sha256sum -- "${artifacts[@]}") > dist/SHA256SUMS
+          # The installer fetches this icon from the repository, not as a release asset.
+          icon_checksum="$(sha256sum build/appicon.png)"
+          printf '%s  sshbrowse.png\n' "${icon_checksum%% *}" >> dist/SHA256SUMS
 
       - name: Upload complete candidate artifacts
         uses: actions/upload-artifact@v7
@@ -325,12 +329,15 @@ jobs:
             exit 1
           fi
           mapfile -t artifacts < <(find dist -maxdepth 1 -type f -printf '%f\n' | sort)
-          if (( ${#artifacts[@]} != 9 )); then
-            printf 'Expected 9 release artifacts, found %d:\n' "${#artifacts[@]}" >&2
+          if (( ${#artifacts[@]} != 7 )); then
+            printf 'Expected 7 release artifacts, found %d:\n' "${#artifacts[@]}" >&2
             printf '%s\n' "${artifacts[@]}" >&2
             exit 1
           fi
           (cd dist && sha256sum -- "${artifacts[@]}") > dist/SHA256SUMS
+          # The installer fetches this icon from the repository, not as a release asset.
+          icon_checksum="$(sha256sum build/appicon.png)"
+          printf '%s  sshbrowse.png\n' "${icon_checksum%% *}" >> dist/SHA256SUMS
 
       - name: Create or update the GitHub Release
         env:
