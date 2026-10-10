@@ -3,6 +3,7 @@
   import * as BackupService from "../../bindings/sshbrowse/internal/app/backup";
   import type { Connection } from "../../bindings/sshbrowse/internal/profile/models";
   import { errorMessage } from "./errors";
+  import { connectionAddress } from "./sidebarActions";
   import {
     applyBackupPreferences,
     captureBackupPreferences,
@@ -13,9 +14,11 @@
     token: string;
     connections: Connection[];
     folders: string[];
-    preferences: BackupPreferenceMap;
+    preferences: BackupPreferenceMap | null;
     warnings: string[];
     existingCount: number;
+    mergeActions: string[];
+    mergeError: string;
   };
   type ApplyResult = { added: number; skipped: number; recoveryPath: string };
 
@@ -30,27 +33,26 @@
   let replaceConnections = $state(false);
   let confirmReplacement = $state(false);
   let restorePreferences = $state(false);
+  let includePreferences = $state(true);
+  let connectionFilter = $state("");
   let status = $state("");
   let statusIsError = $state(false);
   let lastResult = $state<ApplyResult | null>(null);
 
-  let displayItems = $derived.by(() => {
-    if (!preview) return [];
-    return [
-      ...preview.folders.map((folder) => ({ kind: "Folder", label: folder })),
-      ...preview.connections.map((connection) => ({
-        kind: "Connection",
-        label: connection.name || connection.host || "Unnamed connection",
-      })),
-    ];
-  });
-  let visibleItems = $derived(displayItems.slice(0, 20));
-  let visibleWarnings = $derived((preview?.warnings ?? []).slice(0, 20));
+  let filteredConnections = $derived((preview?.connections ?? [])
+    .map((connection, index) => ({ connection, index }))
+    .filter(({ connection }) => [connection.name, connection.host, connection.user, connection.folder]
+      .some((value) => value.toLowerCase().includes(connectionFilter.trim().toLowerCase()))));
+  let jumpNames = $derived(new Map((preview?.connections ?? []).map((connection) => [connection.id, connection.name])));
+  let addCount = $derived(preview?.mergeActions?.filter((action) => action === "add").length ?? 0);
+  let skipCount = $derived(preview?.mergeActions?.filter((action) => action === "skip").length ?? 0);
+  let copyCount = $derived(preview?.mergeActions?.filter((action) => action === "copy").length ?? 0);
   let sessionBlocked = $derived(sessionsOpen && (replaceConnections || restorePreferences));
   let canApply = $derived(
     preview !== null
       && !busy
       && !sessionBlocked
+      && (replaceConnections || !preview?.mergeError)
       && (!replaceConnections || confirmReplacement),
   );
 
@@ -72,7 +74,7 @@
     lastResult = null;
     setBusy(true);
     try {
-      const path = await BackupService.Export(captureBackupPreferences(localStorage));
+      const path = await BackupService.Export(includePreferences ? captureBackupPreferences(localStorage) : null);
       if (path) {
         status = "Backup saved.";
       }
@@ -96,6 +98,7 @@
       }
       const nextPreview = await BackupService.Preview();
       preview = nextPreview as ImportPreview | null;
+      connectionFilter = "";
       replaceConnections = false;
       confirmReplacement = false;
       restorePreferences = false;
@@ -127,7 +130,7 @@
   async function applyImport() {
     if (!preview || !canApply) return;
     const currentPreview = preview;
-    const preferencesChanged = restorePreferences;
+    const preferencesChanged = restorePreferences && currentPreview.preferences !== null;
     const importedPreferences = preferencesChanged ? currentPreview.preferences : null;
     status = "";
     statusIsError = false;
@@ -167,125 +170,133 @@
 </script>
 
 <section aria-label="Backup actions">
-  <p class="intro">Move your saved connections and settings between computers.</p>
+  <p class="intro">Move your saved connections and settings to another computer.</p>
 
   <div class="backup-card">
     <div class="backup-row">
       <div class="copy-block">
         <strong>Export backup</strong>
-        <span>Save connections, folders, and app preferences.</span>
+        <span>Save all connections and folders to a file.</span>
+        <label class="export-preferences"><input type="checkbox" bind:checked={includePreferences} disabled={busy} /> Include app preferences</label>
       </div>
-      <button class="action" type="button" disabled={busy} onclick={exportBackup}>Export backup</button>
+      <button class="action" type="button" disabled={busy} onclick={exportBackup}>Export backup…</button>
     </div>
     <div class="backup-row">
       <div class="copy-block">
         <strong>Import backup</strong>
-        <span>Choose a backup and review its contents.</span>
+        <span>Review a file before adding or restoring connections.</span>
       </div>
-      <button class="action" type="button" disabled={busy} onclick={chooseImport}>{preview ? "Choose another backup…" : "Import backup…"}</button>
+      <button class="action" type="button" disabled={busy} onclick={chooseImport}>{preview ? "Choose another file…" : "Import backup…"}</button>
     </div>
   </div>
 
   <div class="backup-details">
-    <p>SSH keys and OpenSSH configuration must be copied separately.</p>
-    <details>
-      <summary>What’s included?</summary>
-      <div class="details-content">
-        <p>Backups include saved connections, folders, and app preferences.</p>
-        <p>SSH keys, OpenSSH configuration, logs, and open tabs are excluded. Identity and key paths are saved as references; copy those files separately.</p>
-      </div>
-    </details>
+    <p>SSH keys and OpenSSH configuration are not copied. Move them separately and update key paths on the new computer.</p>
+    <p>Backups contain hostnames, usernames, and local paths. Keep them private.</p>
   </div>
 
-    {#if status}
-      <p class="status" class:error={statusIsError} role={statusIsError ? "alert" : "status"}>{status}</p>
-    {/if}
+  {#if status}
+    <p class="status" class:error={statusIsError} role={statusIsError ? "alert" : "status"}>{status}</p>
+  {/if}
+  {#if lastResult}
+    <div class="result" role="status">
+      <span>Added {lastResult.added}; skipped {lastResult.skipped} unchanged.</span>
+      <span>Recovery backup, kept until the next import: <code>{lastResult.recoveryPath}</code></span>
+    </div>
+  {/if}
 
-    {#if lastResult}
-      <div class="result" role="status">
-        <span>Added {lastResult.added}; skipped {lastResult.skipped} existing connections.</span>
-        <span>Recovery backup, kept until the next import: <code>{lastResult.recoveryPath}</code></span>
-      </div>
-    {/if}
-
-    {#if preview}
-      <div class="preview" aria-labelledby="preview-heading">
-        <div class="preview-heading">
-          <div>
-            <strong id="preview-heading">Import preview</strong>
-            <span>SSHBrowse backup</span>
-          </div>
-          <button class="quiet" type="button" disabled={busy} onclick={cancelPreview}>Discard preview</button>
+  {#if preview}
+    <div class="preview" aria-labelledby="preview-heading">
+      <div class="preview-heading">
+        <div>
+          <strong id="preview-heading">Import preview</strong>
+          <span>{preview.connections.length} connections · {preview.folders.length} folders</span>
         </div>
-        <dl class="counts">
-          <div><dt>Connections in file</dt><dd>{preview.connections.length}</dd></div>
-          <div><dt>Folders in file</dt><dd>{preview.folders.length}</dd></div>
-          <div><dt>Connections already saved</dt><dd>{preview.existingCount}</dd></div>
-        </dl>
-
-        {#if visibleItems.length > 0}
-          <div class="item-preview">
-            <strong>Names</strong>
-            <ul>
-              {#each visibleItems as item, index (`${item.kind}-${index}`)}
-                <li><span class="item-kind">{item.kind}</span><span class="item-name">{item.label}</span></li>
-              {/each}
-            </ul>
-            {#if displayItems.length > visibleItems.length}
-              <span class="muted">Showing {visibleItems.length} of {displayItems.length} names.</span>
-            {/if}
-          </div>
-        {/if}
-
-        {#if visibleWarnings.length > 0}
-          <div class="warnings" role="status">
-            <strong>Review these notes</strong>
-            <ul>
-              {#each visibleWarnings as warning, index (`${index}-${warning}`)}
-                <li>{warning}</li>
-              {/each}
-            </ul>
-            {#if preview.warnings.length > visibleWarnings.length}
-              <span class="muted">Showing {visibleWarnings.length} of {preview.warnings.length} notes.</span>
-            {/if}
-          </div>
-        {/if}
-
-        <fieldset disabled={busy}>
-          <legend>Import mode</legend>
-          <label class="choice">
-            <input type="radio" name="import-mode" checked={!replaceConnections} onchange={() => { replaceConnections = false; confirmReplacement = false; }} />
-            <span><strong>Add connections and folders</strong><small>Keep existing saved data and skip duplicate connections.</small></span>
-          </label>
-          <label class="choice">
-            <input type="radio" name="import-mode" checked={replaceConnections} onchange={() => { replaceConnections = true; confirmReplacement = false; }} />
-            <span><strong>Restore backup</strong><small>Replaces saved connections and folders. A recovery backup is kept until the next import.</small></span>
-          </label>
-          <label class="choice subordinate" class:disabled-choice={sessionsOpen}>
-            <input type="checkbox" bind:checked={restorePreferences} disabled={sessionsOpen} />
-            <span><strong>Restore app preferences</strong><small>Off by default. Restores the saved appearance and workspace settings.</small></span>
-          </label>
-        </fieldset>
-
-        {#if replaceConnections}
-          <label class="confirm-choice">
-            <input type="checkbox" bind:checked={confirmReplacement} disabled={busy} />
-            <span>I understand this will replace my saved connections and folders.</span>
-          </label>
-        {/if}
-
-        {#if sessionsOpen}
-          <p class="block-message">Close all tabs to restore a backup or its preferences. You can still add connections.</p>
-        {/if}
-
-        <div class="preview-actions">
-          <button class="action primary" type="button" disabled={!canApply} onclick={applyImport}>{busy ? "Working…" : replaceConnections ? "Restore backup" : "Add imported items"}</button>
-          {#if replaceConnections && confirmReplacement}
-            <span class="muted">A recovery backup will be kept at the reported path.</span>
-          {/if}
-        </div>
+        <button class="quiet" type="button" disabled={busy} onclick={cancelPreview}>Cancel import</button>
       </div>
-    {/if}
+
+      <fieldset disabled={busy}>
+        <legend>How to import</legend>
+        <label class="choice">
+          <input type="radio" name="import-mode" checked={!replaceConnections} onchange={() => { replaceConnections = false; confirmReplacement = false; }} />
+          <span><strong>Add to saved connections</strong><small>Keep existing connections. Skip unchanged records; keep changed records as separate copies.</small></span>
+        </label>
+        <label class="choice">
+          <input type="radio" name="import-mode" checked={replaceConnections} onchange={() => { replaceConnections = true; confirmReplacement = false; }} />
+          <span><strong>Replace saved connections</strong><small>Restore the connections and folders in this file.</small></span>
+        </label>
+      </fieldset>
+
+      {#if replaceConnections}
+        <p class="plan">Replace {preview.existingCount} saved connections with {preview.connections.length} from this file.</p>
+      {:else if preview.mergeError}
+        <p class="block-message" role="alert">Cannot add this backup: {preview.mergeError}</p>
+      {:else}
+        <p class="plan">{addCount} to add · {skipCount} unchanged · {copyCount} separate {copyCount === 1 ? "copy" : "copies"}</p>
+      {/if}
+
+      {#if preview.connections.length > 0}
+        <input class="filter" type="search" aria-label="Filter imported connections" placeholder="Filter connections…" bind:value={connectionFilter} />
+        <div class="connection-list" aria-label="Connections in backup" tabindex="0">
+          {#each filteredConnections as { connection, index } (connection.id)}
+            <details class="connection">
+              <summary>
+                <span class="connection-label"><strong>{connection.name}</strong><small>{connectionAddress(connection)}</small></span>
+                <span class="import-action">{replaceConnections ? "Restore" : preview.mergeActions?.[index] === "skip" ? "Skip" : preview.mergeActions?.[index] === "copy" ? "Copy" : preview.mergeError ? "" : "Add"}</span>
+              </summary>
+              <dl class="connection-details">
+                <div><dt>Folder</dt><dd>{connection.folder || "Root"}</dd></div>
+                {#if connection.identityFile}<div><dt>Key path</dt><dd>{connection.identityFile}</dd></div>{/if}
+                {#if connection.jumpConnectionId}<div><dt>Jump connection</dt><dd>{jumpNames.get(connection.jumpConnectionId) || "Missing from backup"}</dd></div>{/if}
+                {#if connection.jumpHost}<div><dt>Jump route</dt><dd>{connection.jumpHost}</dd></div>{/if}
+                {#if connection.agentForwarding}<div><dt>Agent forwarding</dt><dd>Enabled</dd></div>{/if}
+                {#if connection.x11Forwarding}<div><dt>X11 forwarding</dt><dd>Enabled</dd></div>{/if}
+                {#if connection.localForwards?.length}<div><dt>Local forwards</dt><dd>{connection.localForwards.join(", ")}</dd></div>{/if}
+                {#if connection.remoteForwards?.length}<div><dt>Remote forwards</dt><dd>{connection.remoteForwards.join(", ")}</dd></div>{/if}
+                {#if connection.dynamicForwards?.length}<div><dt>Dynamic forwards</dt><dd>{connection.dynamicForwards.join(", ")}</dd></div>{/if}
+              </dl>
+            </details>
+          {/each}
+          {#if filteredConnections.length === 0}<p class="muted">No matching connections.</p>{/if}
+        </div>
+      {/if}
+      {#if preview.folders.length > 0}
+        <details class="folders">
+          <summary>Review folders</summary>
+          <ul>{#each preview.folders as folder (folder)}<li>{folder}</li>{/each}</ul>
+        </details>
+      {/if}
+
+      {#if preview.warnings.length > 0}
+        <div class="warnings" role="status">
+          <strong>Before connecting</strong>
+          <ul>{#each preview.warnings as warning (warning)}<li>{warning}</li>{/each}</ul>
+        </div>
+      {/if}
+
+      {#if preview.preferences}
+        <label class="choice preferences" class:disabled-choice={sessionsOpen}>
+          <input type="checkbox" bind:checked={restorePreferences} disabled={busy || sessionsOpen} />
+          <span><strong>Restore app preferences</strong><small>Use the appearance, terminal, and workspace settings from this file.</small></span>
+        </label>
+      {:else}
+        <p class="muted preferences">This file has no app preferences. Your current settings will be kept.</p>
+      {/if}
+      {#if replaceConnections}
+        <label class="confirm-choice">
+          <input type="checkbox" bind:checked={confirmReplacement} disabled={busy} />
+          <span>I understand this will replace my saved connections and folders.</span>
+        </label>
+      {/if}
+      {#if sessionsOpen}
+        <p class="block-message">Close all tabs to replace connections or restore preferences. You can still add connections.</p>
+      {/if}
+      <div class="preview-actions">
+        <button class="action primary" type="button" disabled={!canApply} onclick={applyImport}>{busy ? "Working…" : replaceConnections ? "Restore backup" : "Add connections"}</button>
+        <span class="muted">A recovery backup is saved before importing.</span>
+      </div>
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -293,15 +304,14 @@
   .intro { margin: 0 0 24px; }
   .backup-card, .preview { border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface); }
   .backup-card { overflow: hidden; }
-  .backup-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; min-height: 74px; padding: 12px 16px; }
+  .backup-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; }
   .backup-row + .backup-row { border-top: 1px solid var(--border-subtle); }
-  .copy-block { display: flex; flex: 1 1 280px; min-width: 0; flex-direction: column; gap: 3px; }
+  .copy-block { display: flex; flex: 1 1 280px; min-width: 0; flex-direction: column; gap: 4px; }
   .copy-block strong { font-weight: 400; }
-  .backup-details { margin: 16px 0 0; }
+  .export-preferences { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: var(--ui-font-small); }
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+  .backup-details { display: grid; gap: 8px; margin: 16px 0 0; }
   .backup-details p { margin: 0; }
-  .backup-details details { margin-top: 8px; }
-  .backup-details summary { width: fit-content; color: var(--text-primary); cursor: default; }
-  .details-content { display: grid; gap: 8px; max-width: 62ch; margin-top: 12px; }
   .action, .quiet { min-height: 36px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--toolbar-control); color: var(--text-primary); font: inherit; cursor: default; }
   .action { flex-shrink: 0; padding: 0 12px; }
   .action:hover:not(:disabled), .quiet:hover:not(:disabled) { background: var(--toolbar-control-hover); }
@@ -317,33 +327,38 @@
   .preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .preview-heading > div { display: flex; flex-direction: column; gap: 3px; }
   .preview-heading > div span { color: var(--text-secondary); font-size: var(--ui-font-small); }
-  .counts { display: flex; flex-wrap: wrap; gap: 12px 28px; margin: 16px 0; }
-  .counts div { display: flex; flex-direction: column; gap: 3px; }
-  .counts dt { color: var(--text-secondary); font-size: var(--ui-font-small); }
-  .counts dd { margin: 0; font-variant-numeric: tabular-nums; }
-  .item-preview, .warnings { margin-top: 14px; font-size: var(--ui-font-small); }
-  .item-preview ul, .warnings ul { max-height: 190px; overflow: auto; margin: 7px 0; padding-left: 0; list-style: none; }
-  .item-preview li { display: flex; gap: 10px; min-width: 0; padding: 4px 0; border-top: 1px solid var(--border-subtle); }
-  .item-kind { flex: 0 0 82px; color: var(--text-secondary); }
-  .item-name { min-width: 0; overflow-wrap: anywhere; }
-  .warnings { padding: 11px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-raised); }
-  .warnings ul { max-height: 140px; padding-left: 18px; list-style: disc; }
-  .warnings li { margin: 3px 0; overflow-wrap: anywhere; }
   fieldset { display: grid; gap: 10px; min-width: 0; margin: 18px 0 0; padding: 0; border: 0; }
   legend { margin-bottom: 9px; font-size: var(--ui-font-small); font-weight: 500; }
   .choice, .confirm-choice { display: flex; align-items: flex-start; gap: 10px; font-size: var(--ui-font-small); line-height: 1.4; }
-  .choice input, .confirm-choice input { flex: none; margin: 3px 0 0; accent-color: var(--accent); }
+  .choice input, .confirm-choice input { flex: none; margin: 3px 0 0; }
   .choice span { display: flex; flex-direction: column; gap: 2px; }
   .choice small { color: var(--text-secondary); font-size: inherit; }
-  .subordinate { margin-left: 25px; }
+  .plan { margin: 18px 0 12px; font-size: var(--ui-font-small); }
+  .filter { box-sizing: border-box; width: 100%; min-height: 34px; margin-bottom: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text-primary); font: inherit; }
+  .connection-list { max-height: 280px; overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-control); }
+  .connection-list > p { padding: 0 12px; }
+  .connection + .connection { border-top: 1px solid var(--border-subtle); }
+  .connection summary { display: flex; align-items: center; gap: 12px; padding: 9px 12px; cursor: default; }
+  .connection summary::before { content: "▸"; color: var(--text-secondary); }
+  .connection[open] summary::before { content: "▾"; }
+  .connection-label { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+  .connection-label strong { font-size: var(--ui-font-small); font-weight: 500; }
+  .connection-label small, .import-action { color: var(--text-secondary); font-size: var(--ui-font-small); }
+  .connection-details { display: grid; gap: 5px; margin: 0; padding: 0 12px 12px 32px; font-size: var(--ui-font-small); }
+  .connection-details div { display: grid; grid-template-columns: 120px 1fr; gap: 12px; }
+  .connection-details dt { color: var(--text-secondary); }
+  .connection-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+  .folders { margin-top: 12px; font-size: var(--ui-font-small); }
+  .folders ul { max-height: 180px; overflow: auto; padding-left: 20px; }
+  .warnings { margin-top: 14px; padding: 10px 12px; border-radius: var(--radius-control); background: var(--surface-raised); font-size: var(--ui-font-small); }
+  .warnings ul { margin: 6px 0 0; padding-left: 18px; }
+  .warnings li + li { margin-top: 5px; }
+  .preferences, .confirm-choice { margin-top: 16px; }
   .disabled-choice { opacity: .6; }
-  .confirm-choice { margin-top: 14px; }
   .block-message { margin: 12px 0 0; color: var(--status-error); font-size: var(--ui-font-small); line-height: 1.4; }
-  .preview-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 12px; margin-top: 14px; }
-  .preview-actions .muted { overflow-wrap: anywhere; }
+  .preview-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 16px; }
   @media (max-width: 560px) {
     .preview-heading { align-items: flex-start; flex-direction: column; }
-    .counts { gap: 12px 20px; }
-    .item-kind { flex-basis: 74px; }
+    .connection-details div { grid-template-columns: 1fr; gap: 2px; }
   }
 </style>

@@ -74,7 +74,7 @@ func TestApplySnapshotMergeRelinksCollisionsAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result != (TransferResult{Added: 2}) {
+	if result.Added != 2 || result.Skipped != 0 {
 		t.Fatalf("result = %#v, want two additions", result)
 	}
 	connections, err := store.List()
@@ -102,7 +102,7 @@ func TestApplySnapshotMergeRelinksCollisionsAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result != (TransferResult{Skipped: 2}) {
+	if result.Skipped != 2 || result.Added != 0 {
 		t.Fatalf("repeat import result = %#v, want two skips", result)
 	}
 	connectionsAgain, err := store.List()
@@ -334,5 +334,35 @@ func TestMergeRepeatedMissingJumpImportIsIdempotent(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSnapshotTransfersHundredsOfConnectionsAndFolderOrder(t *testing.T) {
+	incoming := Snapshot{Connections: make([]Connection, 500), Folders: make([]string, 50)}
+	for i := range incoming.Folders {
+		incoming.Folders[i] = fmt.Sprintf("Work/Group-%02d", i)
+	}
+	for i := range incoming.Connections {
+		incoming.Connections[i] = Connection{ID: fmt.Sprintf("host-%03d", i), Host: "host.invalid", Folder: incoming.Folders[i%50]}
+	}
+	normalized, err := NormalizeSnapshot(incoming)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantFolders := append([]string{"Work"}, incoming.Folders...)
+	if !reflect.DeepEqual(normalized.Folders, wantFolders) {
+		t.Fatal("normalization changed folder order or repeated ancestors")
+	}
+	store := NewStore(filepath.Join(t.TempDir(), "connections.json"))
+	current, err := store.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ApplySnapshot(normalized, true, SnapshotRevision(current), nil); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Snapshot()
+	if err != nil || !reflect.DeepEqual(loaded, normalized) {
+		t.Fatalf("transferred setup differs: %v", err)
 	}
 }

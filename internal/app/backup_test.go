@@ -83,6 +83,9 @@ func TestRestoreRepairsBrokenCurrentRouting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("broken current routing blocked preview: %v", err)
 	}
+	if preview.MergeError == "" {
+		t.Fatal("preview did not explain why adding is unavailable")
+	}
 	if _, err := b.Apply(preview.Token, false, testBackupPreferences()); err == nil {
 		t.Fatal("merge accepted broken current routing")
 	}
@@ -285,5 +288,75 @@ func TestBackupRejectsMissingOrNullProfileArrays(t *testing.T) {
 	data := []byte(fmt.Sprintf(`{"format":"sshbrowse-backup","version":1,"profile":{"connections":[],"folders":[]},"preferences":%s}`, preferences))
 	if preview, err := b.stage(data); err != nil || len(preview.Connections) != 0 || len(preview.Folders) != 0 {
 		t.Fatalf("empty backup rejected: %v", err)
+	}
+}
+
+func TestBackupPreviewMergeActionsMatchImport(t *testing.T) {
+	b := newTestBackup(t)
+	unchanged, err := b.store.Save(profile.Connection{Name: "Unchanged", Host: "same.invalid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err := b.store.Save(profile.Connection{Name: "Local", Host: "local.invalid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	incoming := profile.Snapshot{Connections: []profile.Connection{
+		unchanged,
+		{ID: "new", Name: "New", Host: "new.invalid", JumpConnectionID: changed.ID},
+		{ID: changed.ID, Name: "Imported", Host: "imported.invalid"},
+	}, Folders: []string{}}
+	data, err := encodeBackup(incoming, testBackupPreferences())
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(b.storePath)
+	preview, err := b.stage(data)
+	if err != nil || preview.MergeError != "" || !reflect.DeepEqual(preview.MergeActions, []string{"skip", "add", "copy"}) {
+		t.Fatalf("merge preview: %+v, %v", preview, err)
+	}
+	after, _ := os.ReadFile(b.storePath)
+	if !bytes.Equal(before, after) {
+		t.Fatal("preview changed saved connections")
+	}
+	result, err := b.Apply(preview.Token, false, testBackupPreferences())
+	if err != nil || result.Added != 2 || result.Skipped != 1 {
+		t.Fatalf("import disagrees with preview: %+v, %v", result, err)
+	}
+	preview, err = b.stage(data)
+	if err != nil || !reflect.DeepEqual(preview.MergeActions, []string{"skip", "skip", "skip"}) {
+		t.Fatalf("repeat preview did not recognize imported copies: %+v, %v", preview, err)
+	}
+}
+
+func TestBackupWithoutPreferences(t *testing.T) {
+	b := newTestBackup(t)
+	data, err := encodeBackup(profile.Snapshot{Connections: []profile.Connection{{ID: "portable", Host: "portable.invalid"}}, Folders: []string{}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(data, []byte(`"preferences"`)) {
+		t.Fatal("connection-only export included preferences")
+	}
+	preview, err := b.stage(data)
+	if err != nil || preview.Preferences != nil {
+		t.Fatalf("connection-only preview: %+v, %v", preview, err)
+	}
+	result, err := b.Apply(preview.Token, false, testBackupPreferences())
+	if err != nil || result.Added != 1 {
+		t.Fatalf("connection-only import: %+v, %v", result, err)
+	}
+	recoveryData, err := readBackupFile(result.RecoveryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var recovery backupFile
+	if err := json.Unmarshal(recoveryData, &recovery); err != nil || !reflect.DeepEqual(recovery.Preferences, testBackupPreferences()) {
+		t.Fatal("connection-only import lost recovery preferences")
+	}
+	// Preferences remain complete and validated when a file includes them.
+	invalid := bytes.Replace(data, []byte(`"format":`), []byte(`"preferences": {}, "format":`), 1)
+	if _, err := b.stage(invalid); err == nil {
+		t.Fatal("accepted an incomplete preference map")
 	}
 }

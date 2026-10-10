@@ -20,8 +20,9 @@ type Snapshot struct {
 }
 
 type TransferResult struct {
-	Added   int `json:"added"`
-	Skipped int `json:"skipped"`
+	Added   int      `json:"added"`
+	Skipped int      `json:"skipped"`
+	Actions []string `json:"actions"` // one action per incoming connection, in file order
 }
 
 // Snapshot reads a consistent view while holding both the process mutex and
@@ -92,15 +93,29 @@ func NormalizeSnapshot(snapshot Snapshot) (Snapshot, error) {
 	}
 
 	folders := make([]string, 0, len(snapshot.Folders))
+	seenFolders := make(map[string]bool, len(snapshot.Folders))
+	addFolder := func(path string) {
+		if path == "" {
+			return
+		}
+		parts := strings.Split(path, "/")
+		for i := range parts {
+			ancestor := strings.Join(parts[:i+1], "/")
+			if !seenFolders[ancestor] {
+				seenFolders[ancestor] = true
+				folders = append(folders, ancestor)
+			}
+		}
+	}
 	for _, folder := range snapshot.Folders {
 		folder, err := NormalizeFolderPath(folder)
 		if err != nil {
 			return Snapshot{}, fmt.Errorf("folder: %w", err)
 		}
-		folders = addFolderAndAncestors(folders, folder)
+		addFolder(folder)
 	}
 	for _, connection := range connections {
-		folders = addFolderAndAncestors(folders, connection.Folder)
+		addFolder(connection.Folder)
 	}
 
 	// Missing hops are allowed so an archive remains portable when it refers to
@@ -257,8 +272,26 @@ func (s *Store) ApplySnapshot(incoming Snapshot, replace bool, expectedRevision 
 	return result, nil
 }
 
+// PreviewMerge uses the same merge rules as ApplySnapshot without writing data.
+func PreviewMerge(current, incoming Snapshot) (TransferResult, error) {
+	incoming, err := NormalizeSnapshot(incoming)
+	if err != nil {
+		return TransferResult{}, err
+	}
+	current, err = NormalizeSnapshot(current)
+	if err != nil {
+		return TransferResult{}, fmt.Errorf("current profile: %w; restore a backup to replace the library", err)
+	}
+	final, result, err := mergeSnapshots(current, incoming)
+	if err == nil {
+		_, err = NormalizeSnapshot(final)
+	}
+	return result, err
+}
+
 func mergeSnapshots(current, incoming Snapshot) (Snapshot, TransferResult, error) {
 	var result TransferResult
+	result.Actions = make([]string, 0, len(incoming.Connections))
 	currentByID := make(map[string]Connection, len(current.Connections))
 	usedIDs := make(map[string]bool, len(current.Connections)+len(incoming.Connections))
 	for _, connection := range current.Connections {
@@ -360,12 +393,18 @@ func mergeSnapshots(current, incoming Snapshot) (Snapshot, TransferResult, error
 		if existing, ok := currentByID[desired.ID]; ok {
 			if reflect.DeepEqual(existing, desired) {
 				result.Skipped++
+				result.Actions = append(result.Actions, "skip")
 				continue
 			}
 			return Snapshot{}, TransferResult{}, fmt.Errorf("imported connection ID %q conflicts with an existing connection", desired.ID)
 		}
 		connections = append(connections, desired)
 		result.Added++
+		if desired.ID != connection.ID {
+			result.Actions = append(result.Actions, "copy")
+		} else {
+			result.Actions = append(result.Actions, "add")
+		}
 	}
 	onboarding := OnboardingState{
 		SSHConfigImportAnswered: current.Onboarding.SSHConfigImportAnswered || incoming.Onboarding.SSHConfigImportAnswered,

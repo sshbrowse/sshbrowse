@@ -28,7 +28,7 @@ type backupFile struct {
 	Version     int               `json:"version"`
 	ExportedAt  time.Time         `json:"exportedAt"`
 	Profile     *profile.Snapshot `json:"profile"`
-	Preferences map[string]string `json:"preferences"`
+	Preferences map[string]string `json:"preferences,omitempty"`
 }
 
 type ImportPreview struct {
@@ -38,6 +38,8 @@ type ImportPreview struct {
 	Preferences   map[string]string    `json:"preferences"`
 	Warnings      []string             `json:"warnings"`
 	ExistingCount int                  `json:"existingCount"`
+	MergeActions  []string             `json:"mergeActions"`
+	MergeError    string               `json:"mergeError"`
 }
 
 type ImportResult struct {
@@ -72,8 +74,10 @@ func (b *Backup) Export(preferences map[string]string) (string, error) {
 		return "", errors.New("another import or export is in progress")
 	}
 	defer b.mu.Unlock()
-	if err := validateBackupPreferences(preferences); err != nil {
-		return "", err
+	if preferences != nil {
+		if err := validateBackupPreferences(preferences); err != nil {
+			return "", err
+		}
 	}
 	if b.app == nil {
 		return "", errors.New("file dialogs are unavailable")
@@ -201,7 +205,7 @@ func (b *Backup) stage(data []byte) (*ImportPreview, error) {
 	if err == nil && (parsed.Profile.Connections == nil || parsed.Profile.Folders == nil) {
 		err = errors.New("backup profile must contain connections and folders arrays")
 	}
-	if err == nil {
+	if err == nil && parsed.Preferences != nil {
 		err = validateBackupPreferences(parsed.Preferences)
 	}
 	if err != nil {
@@ -223,6 +227,12 @@ func (b *Backup) stage(data []byte) (*ImportPreview, error) {
 		Token: hex.EncodeToString(random), Connections: snapshot.Connections,
 		Folders: snapshot.Folders, Preferences: parsed.Preferences, Warnings: profile.SnapshotWarnings(snapshot),
 		ExistingCount: len(current.Connections),
+	}
+	merge, mergeErr := profile.PreviewMerge(current, snapshot)
+	if mergeErr != nil {
+		preview.MergeError = mergeErr.Error()
+	} else {
+		preview.MergeActions = merge.Actions
 	}
 	b.pending = &pendingImport{preview: preview, snapshot: snapshot, revision: profile.SnapshotRevision(current), expires: time.Now().Add(importPreviewLifetime)}
 	return &preview, nil
@@ -269,8 +279,10 @@ func (b *Backup) recoveryPath() string {
 }
 
 func encodeBackup(snapshot profile.Snapshot, preferences map[string]string) ([]byte, error) {
-	if err := validateBackupPreferences(preferences); err != nil {
-		return nil, err
+	if preferences != nil {
+		if err := validateBackupPreferences(preferences); err != nil {
+			return nil, err
+		}
 	}
 	data, err := json.MarshalIndent(backupFile{Format: "sshbrowse-backup", Version: 1, ExportedAt: time.Now().UTC(), Profile: &snapshot, Preferences: preferences}, "", "  ")
 	if err != nil {
