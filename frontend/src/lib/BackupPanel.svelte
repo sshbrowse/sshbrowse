@@ -177,7 +177,11 @@
       <div class="copy-block">
         <strong>Export backup</strong>
         <span>Save all connections and folders to a file.</span>
-        <label class="export-preferences"><input type="checkbox" bind:checked={includePreferences} disabled={busy} /> Include app preferences</label>
+        <label class="export-preferences">
+          <input type="checkbox" bind:checked={includePreferences} disabled={busy} aria-describedby="export-preferences-hint" />
+          Include app settings
+        </label>
+        <small id="export-preferences-hint" class="preferences-hint">Theme, terminal preferences, and interface layout.</small>
       </div>
       <button class="action" type="button" disabled={busy} onclick={exportBackup}>Export backup…</button>
     </div>
@@ -308,8 +312,31 @@
   .backup-row + .backup-row { border-top: 1px solid var(--border-subtle); }
   .copy-block { display: flex; flex: 1 1 280px; min-width: 0; flex-direction: column; gap: 4px; }
   .copy-block strong { font-weight: 400; }
-  .export-preferences { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: var(--ui-font-small); }
-  input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+  .export-preferences { display: flex; align-items: center; gap: 9px; min-height: 28px; margin-top: 6px; font-size: var(--ui-font-body); }
+  .preferences-hint { margin-left: 27px; color: var(--text-secondary); font-size: var(--ui-font-small); line-height: 1.4; }
+  input[type="radio"] { accent-color: var(--accent); }
+  input[type="checkbox"] {
+    appearance: none;
+    display: grid;
+    place-content: center;
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--input-surface);
+  }
+  input[type="checkbox"]:checked { border-color: var(--accent); background: var(--accent); }
+  input[type="checkbox"]:checked::before {
+    content: "";
+    width: 5px;
+    height: 9px;
+    border-right: 2px solid var(--accent-foreground);
+    border-bottom: 2px solid var(--accent-foreground);
+    transform: translateY(-1px) rotate(45deg);
+  }
+  input[type="checkbox"]:disabled { opacity: .5; }
   .backup-details { display: grid; gap: 8px; margin: 16px 0 0; }
   .backup-details p { margin: 0; }
   .action, .quiet { min-height: 36px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--toolbar-control); color: var(--text-primary); font: inherit; cursor: default; }

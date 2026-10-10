@@ -1,3 +1,4 @@
+import { parseCustomPalette, type CustomPalette } from "./customPalette.ts";
 import type { TerminalColors, TerminalFontName, ThemeName } from "./appearance";
 
 export type PreferenceStorage = Pick<Storage, "getItem" | "setItem">;
@@ -16,6 +17,7 @@ export const preferenceKeys = {
   collapsedFolders: "sshbrowse.sidebar.collapsed",
   terminalPasteWarningsDisabled: "sshbrowse.terminal.pasteWarningsDisabled",
   themeName: "sshbrowse.appearance.theme",
+  customPalette: "sshbrowse.appearance.customPalette",
   terminalColors: "sshbrowse.appearance.terminalColors",
   uiSize: "sshbrowse.appearance.uiSize",
   terminalFontSize: "sshbrowse.appearance.terminalFontSize",
@@ -46,6 +48,7 @@ export interface Preferences {
   collapsedFolders: Record<string, boolean>;
   terminalPasteWarningsDisabled: boolean;
   themeName: ThemeName;
+  customPalette: CustomPalette;
   terminalColors: TerminalColors;
   uiSize: UiSize;
   terminalFontSize: number;
@@ -122,7 +125,7 @@ function readCollapsedFolders(storage: PreferenceStorage): Record<string, boolea
 
 function readThemeName(storage: PreferenceStorage): ThemeName {
   const value = readValue(storage, preferenceKeys.themeName);
-  return value === "warm" || value === "moss" || value === "fjord" || value === "oled" || value === "contrast" ? value : "classic";
+  return value === "custom" || value === "warm" || value === "moss" || value === "fjord" || value === "oled" || value === "contrast" ? value : "classic";
 }
 
 function readTerminalColors(storage: PreferenceStorage): TerminalColors {
@@ -156,6 +159,7 @@ export function loadPreferences(storage: PreferenceStorage): Preferences {
     collapsedFolders: readCollapsedFolders(storage),
     terminalPasteWarningsDisabled: readBoolean(storage, preferenceKeys.terminalPasteWarningsDisabled, false),
     themeName: readThemeName(storage),
+    customPalette: parseCustomPalette(readValue(storage, preferenceKeys.customPalette)),
     terminalColors: readTerminalColors(storage),
     uiSize: readUiSize(storage),
     terminalFontSize: readTerminalFontSize(storage),

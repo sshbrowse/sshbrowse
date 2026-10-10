@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -34,11 +35,49 @@ type windowsChromeColours struct {
 // text-muted, and chrome-border roles.
 var windowsChromePalettes = map[string]windowsChromeColours{
 	"warm":     {0x1f2324, 0xcfd9de, 0x8a979e, 0x2e3334},
-	"classic":  {0x262220, 0xe1ded9, 0xa09992, 0x3e3935},
+	"classic":  {0x1c1714, 0xede9e5, 0xb2a69a, 0x3a3129},
 	"moss":     {0x232522, 0xdfe6e3, 0x9aa799, 0x343a30},
 	"fjord":    {0x2c2616, 0xe9ebdc, 0xa1a588, 0x474029},
 	"oled":     {0x000000, 0xdfe5e4, 0x939b98, 0x181917},
 	"contrast": {0x090909, 0xffffff, 0xd0d0d0, 0x707070},
+}
+
+func parseHexColour(value string) (uint32, bool) {
+	if len(value) != 7 || value[0] != '#' {
+		return 0, false
+	}
+	for _, character := range value[1:] {
+		if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'f' || character >= 'A' && character <= 'F') {
+			return 0, false
+		}
+	}
+	colour, err := strconv.ParseUint(value[1:], 16, 24)
+	return uint32(colour), err == nil
+}
+
+func windowsChromeColoursFor(data any) (windowsChromeColours, bool) {
+	if name, ok := data.(string); ok {
+		colours, known := windowsChromePalettes[name]
+		return colours, known
+	}
+	values, ok := data.(map[string]any)
+	if !ok || len(values) != 4 {
+		return windowsChromeColours{}, false
+	}
+	var colours [4]uint32
+	for index, key := range []string{"background", "text", "inactiveText", "border"} {
+		value, ok := values[key].(string)
+		if !ok {
+			return windowsChromeColours{}, false
+		}
+		rgb, valid := parseHexColour(value)
+		if !valid {
+			return windowsChromeColours{}, false
+		}
+		// Win32 COLORREF stores blue before green and red.
+		colours[index] = (rgb&0xff)<<16 | rgb&0xff00 | rgb>>16
+	}
+	return windowsChromeColours{colours[0], colours[1], colours[2], colours[3]}, true
 }
 
 const (
@@ -80,9 +119,16 @@ func NewMainWindow(wailsApp *application.App, statePath string, menu *applicatio
 		},
 		Mac: application.MacWindow{
 			Appearance: application.NSAppearanceNameDarkAqua,
-			// No title text; the web content reaches the top edge and leaves
-			// room for the traffic lights itself.
-			TitleBar: application.MacTitleBarHidden,
+			// An inset compact toolbar lowers the native window buttons into
+			// the web header while keeping content at the top edge.
+			TitleBar: application.MacTitleBar{
+				AppearsTransparent:   true,
+				HideTitle:            true,
+				FullSizeContent:      true,
+				UseToolbar:           true,
+				HideToolbarSeparator: true,
+				ToolbarStyle:         application.MacToolbarStyleUnifiedCompact,
+			},
 		},
 	})
 	window.OnWindowEvent(events.Common.WindowFilesDropped, func(event *application.WindowEvent) {

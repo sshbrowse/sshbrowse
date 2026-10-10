@@ -32,27 +32,32 @@
 
 <div class="jump-field">
   <label for="jump-mode">Routing method</label>
-  <select id="jump-mode" bind:value={savedMode} onchange={changeMode} {disabled}>
-    <option value={false}>Enter manually (ProxyJump)</option>
-    <option value={true}>Saved connection</option>
-  </select>
+  <div class="select-control">
+    <select id="jump-mode" bind:value={savedMode} onchange={changeMode} {disabled}>
+      <option value={false}>Enter manually (ProxyJump)</option>
+      <option value={true}>Saved connection</option>
+    </select>
+  </div>
   {#if savedMode}
     <input aria-label="Search saved jump connections" type="search" onkeydown={(event) => { if (event.key === "Enter") event.preventDefault(); }} bind:value={search} placeholder="Search saved connections" {disabled} />
-    <select aria-label="Saved jump connection" bind:value={connection.jumpConnectionId} required {disabled}>
-      <option value="">Choose a saved connection…</option>
-      {#if connection.jumpConnectionId && !selected}
-        <option value={connection.jumpConnectionId} disabled>Saved connection unavailable</option>
-      {:else if selected && !candidates.includes(selected)}
-        <option value={selected.id}>{selected.folder ? `${selected.folder} / ` : ""}{selected.name} — {selected.host}</option>
-      {/if}
-      {#each candidates as item (item.id)}
-        <option value={item.id}>{item.folder ? `${item.folder} / ` : ""}{item.name} — {item.user ? `${item.user}@` : ""}{item.host}</option>
-      {/each}
-    </select>
+    <div class="select-control">
+      <select aria-label="Saved jump connection" bind:value={connection.jumpConnectionId} required {disabled}>
+        <option value="">Choose a saved connection…</option>
+        {#if connection.jumpConnectionId && !selected}
+          <option value={connection.jumpConnectionId} disabled>Saved connection unavailable</option>
+        {:else if selected && !candidates.includes(selected)}
+          <option value={selected.id}>{selected.folder ? `${selected.folder} / ` : ""}{selected.name} — {selected.host}</option>
+        {/if}
+        {#each candidates as item (item.id)}
+          <option value={item.id}>{item.folder ? `${item.folder} / ` : ""}{item.name} — {item.user ? `${item.user}@` : ""}{item.host}</option>
+        {/each}
+      </select>
+    </div>
     <p>Uses the saved connection’s SSH settings and your local SSH agent.</p>
   {:else}
-    <input id="jump" onkeydown={onrawkeydown} aria-label="Raw ProxyJump" class="technical" bind:value={connection.jumpHost} spellcheck="false" placeholder="[user@]host[:port],…" {disabled} />
-    <p>Enter an SSH alias or ProxyJump route. Leave blank to use your SSH routing settings.</p>
+    <label for="jump">SSH alias or ProxyJump route</label>
+    <input id="jump" onkeydown={onrawkeydown} class="technical" bind:value={connection.jumpHost} spellcheck="false" aria-describedby="jump-hint" {disabled} />
+    <p id="jump-hint">Leave blank to use your SSH routing settings. Use <code>[user@]host[:port]</code>; separate multiple hosts with commas.</p>
   {/if}
 </div>
 
@@ -68,6 +73,7 @@
   }
   input, select {
     width: 100%;
+    min-height: 36px;
     box-sizing: border-box;
     font: var(--ui-font-body) var(--font-ui);
     padding: 7px 9px;
@@ -75,6 +81,9 @@
     border-radius: var(--radius-control);
     background: var(--input-surface);
     color: var(--text-primary);
+  }
+  select {
+    padding-right: 32px;
   }
   input.technical {
     font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -92,5 +101,8 @@
     color: var(--text-muted);
     font-size: var(--ui-font-small);
     line-height: 1.45;
+  }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
   }
 </style>

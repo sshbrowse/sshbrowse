@@ -220,27 +220,27 @@
             bind:value={draft.host}
             required
             autofocus={mode !== "bookmark"}
-            placeholder="Hostname, IP address, or SSH alias"
+            aria-describedby="host-hint"
             spellcheck="false"
             autocomplete="off"
             onkeydown={saveOnEnter}
           />
         </label>
+        <p class="hint" id="host-hint">Enter a hostname, IP address, or alias from your SSH config.</p>
 
         <div class="row">
           <label class="field" for="user">
-            <span>Username</span>
-            <input id="user" class="technical" bind:value={draft.user} placeholder="Optional" spellcheck="false" autocomplete="username" aria-describedby="port-hint" onkeydown={saveOnEnter} />
+            <span>Username <em>Optional</em></span>
+            <input id="user" class="technical" bind:value={draft.user} spellcheck="false" autocomplete="username" aria-describedby="port-hint" onkeydown={saveOnEnter} />
           </label>
           <label class="field port-field" for="port">
-            <span>Port</span>
+            <span>Port <em>Optional</em></span>
             <input
               bind:this={portInput}
               class="technical"
               id="port"
               bind:value={portText}
               inputmode="numeric"
-              placeholder="Default"
               aria-describedby="port-hint"
               onkeydown={saveOnEnter}
             />
@@ -250,16 +250,16 @@
 
         <div class="row organization-row">
           <label class="field" for="name">
-            <span>Name</span>
+            <span>Name <em>Optional</em></span>
             <!-- svelte-ignore a11y_autofocus -->
-            <input id="name" bind:value={draft.name} autofocus={mode === "bookmark"} placeholder={draft.host || "Defaults to host"} onkeydown={saveOnEnter} />
+            <input id="name" bind:value={draft.name} autofocus={mode === "bookmark"} aria-describedby="folder-hint" onkeydown={saveOnEnter} />
           </label>
           <label class="field" for="folder">
-            <span>Folder</span>
-            <input id="folder" bind:value={draft.folder} list="folders" placeholder="No folder" aria-describedby="folder-hint" onkeydown={saveOnEnter} />
+            <span>Folder <em>Optional</em></span>
+            <input id="folder" bind:value={draft.folder} list="folders" aria-describedby="folder-hint" onkeydown={saveOnEnter} />
           </label>
         </div>
-        <p class="hint" id="folder-hint">Name defaults to Host. Choose or create a folder; use / for nested folders.</p>
+        <p class="hint" id="folder-hint">Name defaults to the host; an empty Folder saves at the top level. Choose or create a folder; use / for nested folders.</p>
         <datalist id="folders">
           {#each folders as folder}<option value={folder}></option>{/each}
         </datalist>
@@ -277,7 +277,7 @@
           <label class="field" for="identity">
             <span>SSH key file</span>
             <div class="picker-field">
-              <input id="identity" aria-describedby="identity-hint" class="technical" bind:value={draft.identityFile} spellcheck="false" placeholder="~/.ssh/id_ed25519" onkeydown={saveOnEnter} />
+              <input id="identity" aria-describedby="identity-hint" class="technical" bind:value={draft.identityFile} spellcheck="false" onkeydown={saveOnEnter} />
               <button type="button" onclick={chooseIdentityFile} disabled={choosingIdentity || submitting}>
                 {choosingIdentity ? "Choosing…" : "Choose…"}
               </button>
@@ -328,17 +328,20 @@
         <div class="details-body">
           <label class="field" for="local">
             <span>Local forwarding</span>
-            <textarea id="local" class="technical" bind:value={localForwards} rows="2" spellcheck="false" placeholder="8080:localhost:80"></textarea>
+            <textarea id="local" class="technical" bind:value={localForwards} rows="2" spellcheck="false" aria-describedby="local-hint forwarding-hint"></textarea>
+            <p class="hint" id="local-hint">Example: <code>8080:localhost:80</code></p>
           </label>
           <label class="field" for="remote">
             <span>Remote forwarding</span>
-            <textarea id="remote" class="technical" bind:value={remoteForwards} rows="2" spellcheck="false" placeholder="9090:localhost:90"></textarea>
+            <textarea id="remote" class="technical" bind:value={remoteForwards} rows="2" spellcheck="false" aria-describedby="remote-hint forwarding-hint"></textarea>
+            <p class="hint" id="remote-hint">Example: <code>9090:localhost:90</code></p>
           </label>
           <label class="field" for="dynamic">
             <span>Dynamic forwarding</span>
-            <textarea id="dynamic" class="technical" bind:value={dynamicForwards} rows="2" spellcheck="false" placeholder="1080"></textarea>
+            <textarea id="dynamic" class="technical" bind:value={dynamicForwards} rows="2" spellcheck="false" aria-describedby="dynamic-hint forwarding-hint"></textarea>
+            <p class="hint" id="dynamic-hint">Example: <code>1080</code></p>
           </label>
-          <p class="hint">One tunnel per line, using the format after <code>-L</code>, <code>-R</code>, or <code>-D</code>.</p>
+          <p class="hint" id="forwarding-hint">One tunnel per line, using the format after <code>-L</code>, <code>-R</code>, or <code>-D</code>.</p>
           <p class="hint">Non-loopback bind addresses can expose forwarded listeners to other machines.</p>
         </div>
       </details>
@@ -404,7 +407,7 @@
   h2 {
     margin: 0;
     color: var(--text-primary);
-    font-size: var(--ui-font-heading);
+    font-size: var(--ui-font-dialog-title);
     font-weight: 500;
     letter-spacing: -0.02em;
   }
@@ -470,6 +473,7 @@
   input,
   textarea {
     width: 100%;
+    min-height: 36px;
     box-sizing: border-box;
     font: var(--ui-font-body) var(--font-ui);
     padding: 7px 9px;
@@ -479,10 +483,6 @@
     color: var(--text-primary);
     resize: vertical;
     transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
-  }
-  input::placeholder,
-  textarea::placeholder {
-    color: var(--text-placeholder);
   }
   input.technical,
   textarea.technical {

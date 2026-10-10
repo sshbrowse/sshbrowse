@@ -1,9 +1,11 @@
 :root {
-  --radius-panel: 10px;
-  --radius-dialog: 12px;
+  --radius-panel: 8px;
+  --radius-dialog: 10px;
   --radius-control: 6px;
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --ui-font-body: 14px;
+  --ui-font-tab: 13px;
+  --ui-font-dialog-title: 18px;
   --ui-font-small: 12px;
   --ui-font-tiny: 11px;
   --ui-font-micro: 10px;
@@ -74,49 +76,49 @@
 :root[data-theme="classic"],
 .preview[data-theme="classic"] {
   color-scheme: dark;
-  --canvas: #1b1d20;
-  --chrome: #202226;
-  --chrome-foreground: #d9dee1;
-  --chrome-border: #35393e;
-  --toolbar: #202226;
-  --toolbar-foreground: #c6cdd1;
-  --toolbar-border: #35393e;
-  --toolbar-control: #292c30;
-  --toolbar-control-foreground: #c6cdd1;
-  --toolbar-control-hover: #35393e;
-  --surface: #24272b;
-  --surface-raised: #2d3136;
-  --surface-overlay: #30353a;
+  --canvas: #14171c;
+  --chrome: #14171c;
+  --chrome-foreground: #e5e9ed;
+  --chrome-border: #29313a;
+  --toolbar: #14171c;
+  --toolbar-foreground: #9aa6b2;
+  --toolbar-border: #29313a;
+  --toolbar-control: #1e242c;
+  --toolbar-control-foreground: #e5e9ed;
+  --toolbar-control-hover: #24303a;
+  --surface: #14171c;
+  --surface-raised: #1e242c;
+  --surface-overlay: #1e242c;
   --overlay-backdrop: rgb(0 0 0 / 66%);
   --overlay-backdrop-soft: rgb(0 0 0 / 48%);
-  --input-surface: #17191c;
-  --text-primary: #e4e6e8;
-  --text-secondary: #bdc2c7;
-  --text-muted: #9299a0;
-  --text-disabled: #747c83;
-  --text-placeholder: #8a9299;
-  --icon-muted: #a3aab0;
-  --control-hover: #343a40;
-  --selection: #333a42;
-  --selection-inactive: #2b3036;
-  --border: #454b52;
-  --border-subtle: #353a40;
-  --separator: #3b4147;
-  --focus-ring: #d0dce5;
-  --accent: #aab9c7;
-  --accent-foreground: #15191d;
-  --accent-subtle: rgb(170 185 199 / 19%);
+  --input-surface: #11151a;
+  --text-primary: #e5e9ed;
+  --text-secondary: #9aa6b2;
+  --text-muted: #9aa6b2;
+  --text-disabled: #747f89;
+  --text-placeholder: #9aa6b2;
+  --icon-muted: #9aa6b2;
+  --control-hover: #24303a;
+  --selection: #24303a;
+  --selection-inactive: #1e242c;
+  --border: #39444f;
+  --border-subtle: #29313a;
+  --separator: #29313a;
+  --focus-ring: #a7bbcd;
+  --accent: #a7bbcd;
+  --accent-foreground: #14171c;
+  --accent-subtle: rgb(167 187 205 / 16%);
   --accent-hover: #c0ced9;
-  --sidebar: #1d2024;
-  --sidebar-foreground: #e0e3e6;
-  --sidebar-muted-foreground: #9299a0;
-  --sidebar-control-surface: #2a2e33;
-  --sidebar-row-hover: #2a3036;
-  --sidebar-row-active: #333a42;
-  --sidebar-row-selected: #2b3036;
-  --sidebar-border: #353a40;
-  --terminal-background: #191e21;
-  --terminal-foreground: #e2e7e9;
+  --sidebar: #14171c;
+  --sidebar-foreground: #e5e9ed;
+  --sidebar-muted-foreground: #9aa6b2;
+  --sidebar-control-surface: #1e242c;
+  --sidebar-row-hover: #1e242c;
+  --sidebar-row-active: #24303a;
+  --sidebar-row-selected: #1e242c;
+  --sidebar-border: #29313a;
+  --terminal-background: #101418;
+  --terminal-foreground: #e5e9ed;
   --status-warning: #dfb871;
   --status-warning-surface: #30291f;
   --status-error: #e3908d;
@@ -350,6 +352,8 @@
 
 :root[data-ui-size="large"] {
   --ui-font-body: 15px;
+  --ui-font-tab: 14px;
+  --ui-font-dialog-title: 19px;
   --ui-font-small: 13px;
   --ui-font-tiny: 12px;
   --ui-font-micro: 11px;
@@ -386,8 +390,40 @@ html body dialog[open] {
 
 button,
 input,
+select,
 textarea {
   font-family: inherit;
+}
+
+/* Preserve native select menus and keyboard handling without AppKit's compact face. */
+.select-control {
+  position: relative;
+  min-width: 0;
+}
+
+.select-control select {
+  appearance: none;
+  width: 100%;
+  min-height: 36px;
+  padding-right: 32px;
+  line-height: 1.35;
+}
+
+.select-control::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 5px);
+  right: 13px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--icon-muted);
+  border-bottom: 1.5px solid var(--icon-muted);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.select-control:has(select:disabled)::after {
+  opacity: .5;
 }
 
 input::placeholder,

@@ -1,6 +1,7 @@
 import type { ITheme } from "@xterm/xterm";
+import { customTerminalTheme, defaultCustomPalette, type CustomPalette } from "./customPalette.ts";
 
-export type ThemeName = "warm" | "classic" | "moss" | "fjord" | "oled" | "contrast";
+export type ThemeName = "warm" | "classic" | "moss" | "fjord" | "oled" | "contrast" | "custom";
 export type TerminalColors = "follow" | "neutral";
 export type TerminalFontName = "system" | "jetbrains" | "menlo" | "consolas" | "dejavu";
 
@@ -15,7 +16,7 @@ const terminalFontFamilies: Record<TerminalFontName, string> = {
 };
 
 // Keep each background and foreground aligned with app.css's terminal roles; other entries define ANSI colors.
-const terminalThemes: Record<ThemeName, ITheme> = {
+const terminalThemes: Record<Exclude<ThemeName, "custom">, ITheme> = {
   warm: {
     background: "#171614",
     foreground: "#e9e4d9",
@@ -41,9 +42,28 @@ const terminalThemes: Record<ThemeName, ITheme> = {
     brightWhite: "#ffffff",
   },
   classic: {
-    background: "#191e21",
-    foreground: "#e2e7e9",
-    cursor: "#e2e7e9",
+    background: "#101418",
+    foreground: "#e5e9ed",
+    cursor: "#a7bbcd",
+    cursorAccent: "#101418",
+    selectionBackground: "#24303a",
+    selectionForeground: "#ffffff",
+    black: "#15191d",
+    red: "#e59b99",
+    green: "#a2c9a7",
+    yellow: "#dcc88c",
+    blue: "#9cbcd7",
+    magenta: "#c8afd2",
+    cyan: "#9dcdcc",
+    white: "#e5e9ed",
+    brightBlack: "#8d989f",
+    brightRed: "#f0abab",
+    brightGreen: "#b9dcbb",
+    brightYellow: "#ead9a5",
+    brightBlue: "#b8d2e6",
+    brightMagenta: "#dac5e1",
+    brightCyan: "#b8dfdd",
+    brightWhite: "#ffffff",
   },
   moss: {
     background: "#171d19",
@@ -168,14 +188,15 @@ const neutralTerminalTheme: ITheme = {
   brightWhite: "#ffffff",
 };
 
-export function terminalThemeFor(themeName: ThemeName, terminalColors: TerminalColors): ITheme {
-  return terminalColors === "neutral" ? neutralTerminalTheme : terminalThemes[themeName];
+export function terminalThemeFor(themeName: ThemeName, terminalColors: TerminalColors, palette: CustomPalette = defaultCustomPalette): ITheme {
+  if (terminalColors === "neutral") return neutralTerminalTheme;
+  return themeName === "custom" ? customTerminalTheme(palette) : terminalThemes[themeName];
 }
 
 export function terminalFontFamilyFor(name: TerminalFontName): string {
   return terminalFontFamilies[name];
 }
 
-export function terminalMinimumContrastRatio(themeName: ThemeName, terminalColors: TerminalColors): number {
-  return themeName === "contrast" ? 7 : themeName === "classic" && terminalColors === "follow" ? 1 : 4.5;
+export function terminalMinimumContrastRatio(themeName: ThemeName, _terminalColors: TerminalColors): number {
+  return themeName === "contrast" ? 7 : 4.5;
 }

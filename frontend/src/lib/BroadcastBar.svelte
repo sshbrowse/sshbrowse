@@ -16,8 +16,9 @@
   } from "./routing";
   import { currentPlatform, type ShortcutPlatform } from "./shortcuts";
   import { utf8ByteLength } from "./terminalInput";
-  import type { LiveBroadcastState } from "./liveBroadcast";
+  import { liveBroadcastStartError, type LiveBroadcastState } from "./liveBroadcast";
   import type { Session, Tab } from "./tabs";
+  import { focusedSessionId } from "./workspace";
 
   let {
     sessions,
@@ -73,8 +74,9 @@
     recipients.filter((recipient) => recipient.available && !excludedSessionIds.includes(recipient.logicalSessionId)),
   );
   const selectedCount = $derived(selectedRecipients.length);
-  const recipientSummary = $derived(
-    `${selectedRecipients.slice(0, 2).map((recipient) => recipient.label).join(", ")}${selectedCount > 2 ? ` +${selectedCount - 2}` : ""}`,
+  const focusedId = $derived(focusedSessionId(tabs, activeId));
+  const liveStartError = $derived(
+    liveBroadcastStartError(snapshotBroadcastRecipients(recipients, new Set(excludedSessionIds)), focusedId),
   );
 
   onMount(() => {
@@ -102,7 +104,6 @@
 
   function setScope(nextScope: BroadcastScope) {
     scope = nextScope;
-    if (recipientPicker) recipientPicker.open = false;
     excludedSessionIds = [];
     validationError = null;
     deliveries = null;
@@ -114,6 +115,7 @@
     } else if (!excludedSessionIds.includes(logicalSessionId)) {
       excludedSessionIds = [...excludedSessionIds, logicalSessionId];
     }
+    validationError = null;
     deliveries = null;
   }
 
@@ -265,14 +267,26 @@
     {/if}
   {:else}
     <div class="broadcast-heading">
-      <div class="mode-switch" role="group" aria-label="Broadcast mode">
-        <button type="button" class:active={mode === "command"} aria-pressed={mode === "command"} onclick={() => setMode("command")}>Command</button>
-        <button type="button" class:active={mode === "live"} aria-pressed={mode === "live"} onclick={() => setMode("live")}>Live input</button>
-      </div>
+      <strong>Broadcast</strong>
+      {#if sessions.length > 0}
+        <div class="select-control mode-select">
+          <select
+            aria-label="Broadcast mode"
+            value={mode}
+            disabled={sending || commandConfirmation !== null || !enabled}
+            onchange={(event) => setMode(event.currentTarget.value as BroadcastMode)}
+          >
+            <option value="command">Send a command</option>
+            <option value="live">Live input</option>
+          </select>
+        </div>
+      {/if}
       <button class="close" type="button" aria-label="Close broadcast bar" title="Close" disabled={sending || commandConfirmation !== null} onclick={onclose}><X size={16} /></button>
     </div>
 
-    {#if mode === "command"}
+    {#if sessions.length === 0}
+      <p class="empty-state">Open a terminal to send a command or mirror input.</p>
+    {:else if mode === "command"}
       <form class="broadcast-form" onsubmit={(event) => { event.preventDefault(); void submit(); }}>
         <textarea
           class="command"
@@ -282,8 +296,8 @@
           autocomplete="off"
           spellcheck="false"
           aria-label="Command"
-          rows="2"
-          placeholder={shortcutPlatform === "mac" ? "Command block — ⌘↵ to send" : "Command block — Ctrl+↵ to send"}
+          rows={Math.min(5, command.split(/\r\n|\r|\n/).length)}
+          placeholder="Enter a command or block"
           disabled={sending || commandConfirmation !== null}
           onpaste={validatePaste}
           onkeydown={handleCommandKeydown}
@@ -291,10 +305,6 @@
         ></textarea>
 
         <div class="destination-row">
-          <div class="scope" role="group" aria-label="Recipient scope">
-            <button type="button" class:active={scope === "current"} aria-pressed={scope === "current"} disabled={sending} onclick={() => setScope("current")}>Current tab</button>
-            <button type="button" class:active={scope === "all"} aria-pressed={scope === "all"} disabled={sending} onclick={() => setScope("all")}>All tabs</button>
-          </div>
           {@render RecipientPicker(recipients, excludedSessionIds, sending, setIncluded)}
           <button class="send" type="submit" disabled={sending || selectedCount === 0 || command.trim() === ""}>{sending ? "Sending…" : selectedCount === 0 ? "Send" : `Send to ${selectedCount}`}</button>
         </div>
@@ -302,6 +312,7 @@
 
       <div class="broadcast-status" aria-live="polite">
         <span class="command-caution">Send only at a command prompt.</span>
+        <span class="send-shortcut">{shortcutPlatform === "mac" ? "⌘↵ to send" : "Ctrl+↵ to send"}</span>
         {#if validationError}
           <span class="error">{validationError}</span>
         {:else if deliveries}
@@ -317,19 +328,15 @@
       <div class="live-setup">
         <div class="live-warning" role="alert">
           <strong>Every keystroke is mirrored.</strong>
-          <span>Control keys and approved paste go to each selected terminal, including the focused one.</span>
+          <span>Keys and approved paste go to every selected terminal, including the focused one.</span>
         </div>
         <div class="destination-row">
-          <div class="scope" role="group" aria-label="Recipient scope">
-            <button type="button" class:active={scope === "current"} aria-pressed={scope === "current"} onclick={() => setScope("current")}>Current tab</button>
-            <button type="button" class:active={scope === "all"} aria-pressed={scope === "all"} onclick={() => setScope("all")}>All tabs</button>
-          </div>
           {@render RecipientPicker(recipients, excludedSessionIds, false, setIncluded)}
-          <button class="start-live" type="button" disabled={!enabled || selectedCount < 2} onclick={startLive}>Start live input</button>
+          <button class="start-live" type="button" disabled={!enabled || liveStartError !== null} onclick={startLive}>Start live input</button>
         </div>
       </div>
       <div class="broadcast-status" aria-live="polite">
-        {#if selectedCount < 2}<span class="reminder">Select at least two live sessions, including the focused terminal.</span>{/if}
+        {#if liveStartError}<span class="reminder">{liveStartError}</span>{/if}
         {#if validationError}<span class="error">{validationError}</span>{/if}
         {#if broadcastError}<span class="error">{broadcastError}</span>{/if}
       </div>
@@ -355,17 +362,17 @@
 )}
   <details class="recipient-picker" bind:this={recipientPicker}>
     <summary title={selectedRecipients.map((recipient) => recipient.label).join(", ")}>
-      {#if selectedCount === 0}
-        <span class="recipient-count" aria-live="polite">Choose recipients</span>
-      {:else if selectedCount === 1}
-        <span class="recipient-summary" aria-live="polite">{recipientSummary}</span>
-      {:else}
-        <span class="recipient-count" aria-live="polite">{selectedCount} recipient{selectedCount === 1 ? "" : "s"}</span>
-        <span class="recipient-summary">{recipientSummary}</span>
-      {/if}
+      <span class="recipient-count" aria-live="polite">To {selectedCount} terminal{selectedCount === 1 ? "" : "s"}</span>
+      <span class="recipient-scope">· {scope === "current" ? "Current tab" : "All tabs"}</span>
       <ChevronDown class="picker-chevron" size={14} />
     </summary>
     <div class="recipient-menu">
+      <strong>Recipients</strong>
+      <fieldset class="scope-options" aria-label="Recipient scope">
+        <label><input type="radio" name="broadcast-scope" checked={scope === "current"} disabled={sending} onchange={() => setScope("current")} /> Current tab</label>
+        <label><input type="radio" name="broadcast-scope" checked={scope === "all"} disabled={sending} onchange={() => setScope("all")} /> All tabs</label>
+      </fieldset>
+      <span class="scope-hint">Terminals in the selected scope</span>
       {@render RecipientList(recipients, excludedSessionIds, sending, setIncluded)}
     </div>
   </details>
@@ -387,7 +394,11 @@
           onchange={(event) => setIncluded(recipient.logicalSessionId, event.currentTarget.checked)}
         />
         <span class="recipient-name">{recipient.label}</span>
-        {#if !recipient.available}<small class="recipient-status">{recipient.status}</small>{/if}
+        {#if !recipient.available}
+          <small class="recipient-status">{recipient.status}</small>
+        {:else if recipient.logicalSessionId === focusedId}
+          <small class="recipient-status">Focused</small>
+        {/if}
       </label>
     {:else}
       <span class="no-recipients">No sessions in scope</span>
@@ -402,35 +413,38 @@
     z-index: 3;
     flex: none;
     display: grid;
-    gap: 6px;
+    gap: 4px;
     padding: 6px 12px;
     border-bottom: 1px solid var(--border-subtle);
     background: var(--surface);
     color: var(--text-secondary);
-    font: var(--ui-font-small) var(--font-ui);
+    font: var(--ui-font-body) var(--font-ui);
   }
   .broadcast-heading,
   .destination-row,
-  .live-strip,
-  .mode-switch,
-  .scope {
+  .live-strip {
     display: flex;
     align-items: center;
   }
   .broadcast-heading {
-    min-height: 26px;
+    min-height: 32px;
     gap: 12px;
   }
-  .mode-switch {
-    gap: 16px;
+  .broadcast-heading strong,
+  .recipient-menu > strong {
+    color: var(--text-primary);
+    font-weight: 500;
   }
-  .scope {
-    width: max-content;
-    padding: 2px;
+  .mode-select { flex: none; }
+  .mode-select select {
+    min-height: 32px;
+    padding: 4px 32px 4px 10px;
+    border: 1px solid var(--border);
     border-radius: var(--radius-control);
+    background: var(--input-surface);
+    color: var(--text-primary);
+    font: inherit;
   }
-  .mode-switch button,
-  .scope button,
   .close,
   .stop-live {
     border: 0;
@@ -439,28 +453,6 @@
     font: inherit;
     cursor: default;
   }
-  .mode-switch button {
-    height: 26px;
-    padding: 0 2px;
-    border-radius: 0;
-    color: var(--text-muted);
-  }
-  .mode-switch button.active {
-    box-shadow: inset 0 -2px var(--text-secondary);
-    color: var(--text-primary);
-  }
-  .scope button {
-    height: 24px;
-    padding: 0 9px;
-    border-radius: 4px;
-    white-space: nowrap;
-  }
-  .scope button.active {
-    background: var(--selection-inactive);
-    color: var(--text-primary);
-  }
-  .mode-switch button:hover,
-  .scope button:hover,
   .close:hover,
   .stop-live:hover {
     background: var(--control-hover);
@@ -480,36 +472,26 @@
     min-width: 0;
     width: 100%;
     overflow: visible;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-control);
-    background: var(--surface-raised);
-  }
-  .broadcast-form:focus-within {
-    border-color: var(--focus-ring);
+    gap: 2px;
   }
   .command {
     width: 100%;
     min-width: 0;
-    min-height: 44px;
+    min-height: 40px;
     max-height: 112px;
     padding: 7px 10px;
     resize: vertical;
-    border: 0;
-    border-radius: var(--radius-control) var(--radius-control) 0 0;
-    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--input-surface);
     color: var(--text-primary);
     font: var(--ui-font-body) ui-monospace, "SF Mono", Menlo, monospace;
     line-height: 1.35;
   }
-  .command:focus-visible {
-    outline: none;
-  }
   .destination-row {
     gap: 8px;
     min-width: 0;
-    min-height: 36px;
-    padding: 3px 6px;
-    border-top: 1px solid var(--border-subtle);
+    min-height: 32px;
   }
   .recipient-picker {
     position: relative;
@@ -518,11 +500,13 @@
   }
   .recipient-picker summary {
     display: flex;
+    width: max-content;
+    max-width: 100%;
     align-items: center;
     gap: 7px;
-    height: 26px;
+    min-height: 32px;
     min-width: 0;
-    padding: 0 8px;
+    padding: 4px 0;
     border: 0;
     border-radius: var(--radius-control);
     background: transparent;
@@ -549,24 +533,25 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .recipient-summary {
+  .recipient-scope {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .recipient-picker :global(.picker-chevron) {
+    flex: none;
     color: var(--text-muted);
   }
   .recipient-menu {
     position: absolute;
     top: calc(100% + 4px);
-    right: 0;
+    left: 0;
     z-index: 10;
-    width: min(400px, max(100%, 260px));
-    max-width: calc(100vw - 24px);
-    max-height: 240px;
-    padding: 6px;
+    width: min(360px, max(100%, 280px));
+    max-width: 100cqw;
+    max-height: 280px;
+    padding: 12px;
     overflow-y: auto;
     border: 1px solid var(--border);
     border-radius: var(--radius-panel);
@@ -576,6 +561,28 @@
   .recipient-list {
     display: grid;
     gap: 2px;
+  }
+  .scope-options {
+    display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 8px 16px;
+    margin: 8px 0;
+    padding: 0;
+    border: 0;
+  }
+  .scope-options label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 30px;
+    color: var(--text-primary);
+  }
+  .scope-options input { margin: 0; accent-color: var(--accent); }
+  .scope-hint {
+    display: block;
+    margin-bottom: 4px;
+    font-size: var(--ui-font-small);
   }
   .recipient-list label {
     display: flex;
@@ -600,15 +607,31 @@
     text-overflow: ellipsis;
   }
   .recipient-list input {
-    width: 14px;
-    height: 14px;
+    appearance: none;
+    display: grid;
+    place-content: center;
+    flex: none;
+    width: 18px;
+    height: 18px;
     margin: 0;
-    accent-color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--input-surface);
   }
+  .recipient-list input:checked { border-color: var(--accent); background: var(--accent); }
+  .recipient-list input:checked::before {
+    content: "";
+    width: 5px;
+    height: 9px;
+    border-right: 2px solid var(--accent-foreground);
+    border-bottom: 2px solid var(--accent-foreground);
+    transform: translateY(-1px) rotate(45deg);
+  }
+  .recipient-list input:disabled { opacity: .5; }
   .recipient-status,
   .no-recipients {
     color: var(--text-muted);
-    font-size: var(--ui-font-tiny);
+    font-size: var(--ui-font-small);
   }
   .no-recipients {
     padding: 8px;
@@ -616,7 +639,7 @@
   .send,
   .start-live {
     flex: none;
-    height: 30px;
+    min-height: 32px;
     padding: 0 12px;
     border: 0;
     border-radius: var(--radius-control);
@@ -637,7 +660,7 @@
     color: var(--text-disabled);
   }
   .close:disabled,
-  .scope button:disabled {
+  .mode-select select:disabled {
     opacity: 0.5;
   }
   .broadcast-status {
@@ -646,12 +669,14 @@
     gap: 3px 10px;
     max-height: 44px;
     overflow-y: auto;
-    font-size: var(--ui-font-tiny);
+    font-size: var(--ui-font-small);
     line-height: 1.35;
   }
   .reminder {
-    color: var(--text-muted);
+    color: var(--text-secondary);
   }
+  .send-shortcut { margin-left: auto; }
+  .empty-state { margin: 0; padding: 4px 0 6px; }
   .command-caution {
     color: var(--status-warning);
     font-size: var(--ui-font-small);
@@ -661,9 +686,9 @@
   }
   .live-warning {
     display: block;
-    padding: 8px 10px;
-    border-left: 2px solid var(--status-warning);
-    border-radius: var(--radius-control) var(--radius-control) 0 0;
+    padding: 4px 0;
+    font-size: var(--ui-font-small);
+    line-height: 1.4;
   }
   .live-warning strong {
     color: var(--status-warning);
@@ -699,24 +724,18 @@
     color: var(--text-primary);
   }
   @container (max-width: 600px) {
-    .destination-row {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-    }
-    .recipient-picker {
-      width: 100%;
-    }
-    .scope button {
-      padding: 0 6px;
-    }
-    .send,
-    .start-live {
-      grid-column: 2;
-      justify-self: end;
-      padding: 0 8px;
-    }
     .live-strip span {
       display: none;
     }
+  }
+  @container (max-width: 380px) {
+    .broadcast-heading,
+    .destination-row { flex-wrap: wrap; }
+    .mode-select { order: 3; }
+    .recipient-picker { flex-basis: 100%; }
+    .send,
+    .start-live { margin-left: auto; }
+    .live-strip { flex-wrap: wrap; }
+    .live-strip strong { white-space: normal; }
   }
 </style>

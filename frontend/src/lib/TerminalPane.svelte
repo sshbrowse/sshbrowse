@@ -58,6 +58,7 @@
   import type { Connection } from "../../bindings/sshbrowse/internal/profile/models";
   import type { SessionCommand, SessionStatus } from "./tabs";
   import TerminalPasteConfirmDialog from "./TerminalPasteConfirmDialog.svelte";
+  import { defaultCustomPalette, type CustomPalette } from "./customPalette";
   import { terminalFontFamilyFor, terminalMinimumContrastRatio, terminalThemeFor, type TerminalColors, type TerminalFontName, type ThemeName } from "./appearance";
   import {
     classifyTerminalPaste,
@@ -95,6 +96,7 @@
     searchRequest = 0,
     shortcutsEnabled,
     themeName,
+    customPalette = defaultCustomPalette,
     terminalColors,
     terminalFontName,
     defaultFontSize,
@@ -125,6 +127,7 @@
     searchRequest?: number;
     shortcutsEnabled: boolean;
     themeName: ThemeName;
+    customPalette?: CustomPalette;
     terminalColors: TerminalColors;
     terminalFontName: TerminalFontName;
     defaultFontSize: number;
@@ -632,7 +635,7 @@
       fontSize,
       cursorBlink: true,
       macOptionIsMeta: true,
-      theme: terminalThemeFor(themeName, terminalColors),
+      theme: terminalThemeFor(themeName, terminalColors, customPalette),
       minimumContrastRatio: terminalMinimumContrastRatio(themeName, terminalColors),
       scrollback: normalizeTerminalScrollback(scrollbackLines),
       // The official search addon uses xterm's proposed decoration API.
@@ -881,13 +884,14 @@
   $effect(() => {
     const nextThemeName = themeName;
     const nextTerminalColors = terminalColors;
+    const nextPalette = customPalette;
     const nextFontName = terminalFontName;
     const nextDefaultFontSize = clampFontSize(defaultFontSize);
     if (!mounted) {
       return;
     }
 
-    terminal.options.theme = terminalThemeFor(nextThemeName, nextTerminalColors);
+    terminal.options.theme = terminalThemeFor(nextThemeName, nextTerminalColors, nextPalette);
     // xterm adjusts foreground glyphs without turning ANSI black backgrounds gray.
     terminal.options.minimumContrastRatio = terminalMinimumContrastRatio(nextThemeName, nextTerminalColors);
     if (appliedFontName !== nextFontName) {

@@ -277,10 +277,10 @@
     min-width: 0;
     align-items: flex-end;
     gap: 2px;
-    height: 40px;
+    height: var(--window-header-height, 40px);
     padding: 4px 6px 0;
     background: var(--toolbar);
-    font: var(--ui-font-small) var(--font-ui);
+    font: var(--ui-font-tab) var(--font-ui);
     color: var(--toolbar-foreground);
     user-select: none;
     overflow-x: auto;
@@ -296,7 +296,7 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    height: 36px;
+    height: calc(var(--window-header-height, 40px) - 4px);
     padding: 0 5px 0 9px;
     min-width: 112px;
     max-width: 220px;
@@ -313,7 +313,8 @@
   }
   .tab.active {
     background: var(--terminal-background);
-    color: var(--text-primary);
+    color: var(--terminal-foreground);
+    box-shadow: inset 0 2px var(--accent);
   }
   .tab:focus-visible {
     outline: 2px solid var(--focus-ring);
@@ -346,7 +347,8 @@
     font-size: var(--ui-font-tiny);
   }
   .active .state-label {
-    color: var(--text-secondary);
+    color: var(--terminal-foreground);
+    opacity: .7;
   }
   .tab.live:not(.active) .state-label {
     display: none;
@@ -364,6 +366,9 @@
     border-radius: 50%;
     background: var(--text-secondary);
   }
+  .active .status { background: var(--terminal-foreground); }
+  .active .status.connecting,
+  .active .status.closed { background: transparent; border-color: var(--terminal-foreground); }
   .status.connecting {
     border: 1px solid var(--text-secondary);
     background: transparent;

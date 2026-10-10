@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { customThemeProperties, defaultCustomPalette } from "../src/lib/customPalette.ts";
+
 const stylesheet = readFileSync(new URL("../src/app.css", import.meta.url), "utf8");
 const windowsChromeSource = readFileSync(new URL("../../internal/app/window.go", import.meta.url), "utf8");
 const windowsChromeUpdatesSource = readFileSync(new URL("../../internal/app/window_theme_windows.go", import.meta.url), "utf8");
@@ -81,4 +83,8 @@ test("the unthemed document starts with Classic colors", () => {
   assert.match(stylesheet, /:root\s*,\s*:root\[data-theme="classic"\]/);
   assert.match(windowsChromeSource, /func windowsChromeTheme\(\) application\.ThemeSettings \{\s*colours := windowsChromePalettes\["classic"\]/);
   assert.match(windowsChromeUpdatesSource, /selectedColours\.Store\(windowsChromePalettes\["classic"\]\)/);
+});
+
+test("custom palettes supply the built-in semantic roles", () => {
+  assert.deepEqual(Object.keys(customThemeProperties(defaultCustomPalette)).map((key) => `--${key}`).sort(), [...paletteRoles("classic")].sort());
 });
