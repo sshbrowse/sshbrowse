@@ -572,6 +572,11 @@
     persistPreference(preferenceKeys.copyOnSelection, String(copyOnSelection));
   }
 
+  function setTerminalPasteWarningsDisabled(disabled: boolean) {
+    terminalPasteWarningsDisabled = disabled;
+    persistPreference(preferenceKeys.terminalPasteWarningsDisabled, String(disabled));
+  }
+
   function toggleBroadcastBar() {
     if (modalDialogOpen() || broadcastSending || liveBroadcast !== null) {
       return;
@@ -1821,10 +1826,7 @@
               pasteWarningsDisabled={terminalPasteWarningsDisabled}
               validatepaste={validateTerminalPaste}
               onpasteconfirmationchange={(confirming) => (terminalPasteConfirmingSessionId = confirming ? session.id : null)}
-              onpastewarningschange={(disabled) => {
-                terminalPasteWarningsDisabled = disabled;
-                persistPreference(preferenceKeys.terminalPasteWarningsDisabled, String(disabled));
-              }}
+              onpastewarningschange={setTerminalPasteWarningsDisabled}
               onfocus={() => selectSession(session.id)}
               onclose={() => requestClose({ kind: "session", id: session.id })}
             />
@@ -1866,6 +1868,7 @@
       {terminalScrollbackLines}
       {rightClickToPaste}
       {copyOnSelection}
+      {terminalPasteWarningsDisabled}
       {sidebarWidth}
       {updateInfo}
       {updateStatus}
@@ -1890,6 +1893,7 @@
       onterminalscrollbackchange={setTerminalScrollbackLines}
       onrightclickpastechange={setRightClickToPaste}
       oncopyselectionchange={setCopyOnSelection}
+      onpastewarningschange={setTerminalPasteWarningsDisabled}
       onclose={closeSettings}
     />
   {/if}

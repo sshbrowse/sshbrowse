@@ -35,6 +35,7 @@ test("Settings shows check, download, retry, and restart controls for each updat
       terminalFontName: "default",
       rightClickToPaste: false,
       copyOnSelection: false,
+      terminalPasteWarningsDisabled: false,
       terminalScrollbackLines: 1000,
       sidebarWidth: 240,
       updateInfo: { version: "1.0.0", availability: "supported", message: "" },

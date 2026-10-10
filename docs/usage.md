@@ -16,6 +16,8 @@ Your system's OpenSSH handles authentication, host keys, and SSH configuration.
 - **Find in Terminal…** searches the selected pane. Use Cmd+F on macOS or
   Ctrl+Shift+F on Linux and Windows. Adjust retained history in
   **Settings > Terminal > Scrollback lines**.
+- Re-enable paste confirmations with **Settings > Terminal > Warn before pasting
+  multiple lines** after choosing **Don't show these warnings again**.
 - Broadcast sends commands or live input to multiple terminals. Choose the mode
   and use the recipient menu to select the tab scope and individual terminals.
   Check the visible recipient count before sending. Live input requires at least

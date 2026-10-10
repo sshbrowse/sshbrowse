@@ -24,6 +24,7 @@
     terminalFontName,
     rightClickToPaste,
     copyOnSelection,
+    terminalPasteWarningsDisabled,
     terminalScrollbackLines,
     sidebarWidth,
     updateInfo,
@@ -48,6 +49,7 @@
     onterminalfontchange,
     onrightclickpastechange,
     oncopyselectionchange,
+    onpastewarningschange,
     onterminalscrollbackchange,
     onclose,
   }: {
@@ -64,6 +66,7 @@
     terminalFontName: TerminalFontName;
     rightClickToPaste: boolean;
     copyOnSelection: boolean;
+    terminalPasteWarningsDisabled: boolean;
     terminalScrollbackLines: number;
     sidebarWidth: number;
     updateInfo: UpdateInfo | null;
@@ -88,6 +91,7 @@
     onterminalfontchange: (font: TerminalFontName) => void;
     onrightclickpastechange: (enabled: boolean) => void;
     oncopyselectionchange: (enabled: boolean) => void;
+    onpastewarningschange: (disabled: boolean) => void;
     onterminalscrollbackchange: (lines: number) => void;
     onclose: () => void;
   } = $props();
@@ -369,6 +373,10 @@
                 <div class="setting-row">
                   <div><strong>Right-click to paste</strong><span>Shift and right-click opens the terminal context menu</span></div>
                   <button class="switch" type="button" role="switch" aria-label="Right-click to paste" aria-checked={rightClickToPaste} onclick={() => onrightclickpastechange(!rightClickToPaste)}><span></span></button>
+                </div>
+                <div class="setting-row">
+                  <div><strong>Warn before pasting multiple lines</strong><span>Ask for confirmation when pasted text contains line breaks</span></div>
+                  <button class="switch" type="button" role="switch" aria-label="Warn before pasting multiple lines" aria-checked={!terminalPasteWarningsDisabled} onclick={() => onpastewarningschange(!terminalPasteWarningsDisabled)}><span></span></button>
                 </div>
               </div>
               <p id="scrollback-warning" class="hint">Lowering this limit removes the oldest retained lines in every open terminal. Removed output cannot be recovered.</p>
