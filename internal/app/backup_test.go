@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -56,7 +57,8 @@ func TestFirstImportCreatesPrivateConfigAndRecovery(t *testing.T) {
 	if err != nil || result.Added != 1 {
 		t.Fatalf("first import: %+v, %v", result, err)
 	}
-	if info, err := os.Stat(filepath.Dir(path)); err != nil || info.Mode().Perm() != 0o700 {
+	// Windows mode bits do not express Unix file permissions.
+	if info, err := os.Stat(filepath.Dir(path)); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o700) {
 		t.Fatal("first import did not create a private config directory")
 	}
 	data, err := readBackupFile(result.RecoveryPath)
@@ -145,7 +147,7 @@ func TestBackupStageApplyAndRecovery(t *testing.T) {
 	if _, err := b.Apply(preview.Token, true, testBackupPreferences()); err == nil {
 		t.Fatal("applied a consumed token")
 	}
-	if info, err := os.Stat(result.RecoveryPath); err != nil || info.Mode().Perm() != 0o600 {
+	if info, err := os.Stat(result.RecoveryPath); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatal("recovery permissions are not private")
 	}
 }
@@ -208,7 +210,7 @@ func TestBackupExportProtectsActiveFiles(t *testing.T) {
 	if err := b.exportFile(output, testBackupPreferences()); err != nil {
 		t.Fatal(err)
 	}
-	if info, err := os.Stat(output); err != nil || info.Mode().Perm() != 0o600 {
+	if info, err := os.Stat(output); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatal("export permissions are not private")
 	}
 }

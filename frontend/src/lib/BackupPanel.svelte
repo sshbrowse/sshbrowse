@@ -237,7 +237,7 @@
 
       {#if preview.connections.length > 0}
         <input class="filter" type="search" aria-label="Filter imported connections" placeholder="Filter connections…" bind:value={connectionFilter} />
-        <div class="connection-list" aria-label="Connections in backup" tabindex="0">
+        <div class="connection-list" role="region" aria-label="Connections in backup">
           {#each filteredConnections as { connection, index } (connection.id)}
             <details class="connection">
               <summary>
