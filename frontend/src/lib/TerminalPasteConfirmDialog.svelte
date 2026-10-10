@@ -1,23 +1,24 @@
 <script lang="ts">
-  import { terminalPastePrompt } from "./terminalInput";
+  import { untrack } from "svelte";
+  import { logicalLineCount, terminalPastePrompt, utf8ByteLength } from "./terminalInput";
 
   let {
-    lineCount,
-    byteCount,
+    text,
     sessionLabel,
     recipientCount,
-    preview,
     onclose,
   }: {
-    lineCount: number;
-    byteCount: number;
+    text: string;
     sessionLabel: string;
     recipientCount: number | null;
-    preview: string;
-    onclose: (confirmed: boolean, disableWarnings: boolean) => void;
+    onclose: (text: string | null, disableWarnings: boolean) => void;
   } = $props();
 
   let dialog: HTMLDialogElement;
+  // Each paste mounts a new dialog; keep edits local until confirmation.
+  let editedText = $state(untrack(() => text));
+  let lineCount = $derived(logicalLineCount(editedText));
+  let byteCount = $derived(utf8ByteLength(editedText));
   let disableWarnings = $state(false);
 
   $effect(() => {
@@ -33,7 +34,7 @@
   }
 </script>
 
-<dialog bind:this={dialog} onclose={() => onclose(dialog.returnValue === "confirm", disableWarnings)} aria-labelledby="paste-confirm-heading">
+<dialog bind:this={dialog} onclose={() => onclose(dialog.returnValue === "confirm" ? editedText : null, disableWarnings)} aria-labelledby="paste-confirm-heading">
   <form method="dialog">
     <header>
       <h2 id="paste-confirm-heading">Confirm terminal paste</h2>
@@ -44,14 +45,22 @@
         <div><dt>Lines</dt><dd>{lineCount}</dd></div>
         <div><dt>Bytes</dt><dd>{byteCount.toLocaleString()}</dd></div>
       </dl>
-      <pre aria-label="Paste preview">{preview}</pre>
+      <label class="text-label" for="paste-text">Text to paste</label>
+      <textarea
+        id="paste-text"
+        bind:value={editedText}
+        rows={Math.min(Math.max(lineCount, 3), 8)}
+        spellcheck="false"
+        autocapitalize="off"
+        autocomplete="off"
+      ></textarea>
       <p class="warning">Pasted input may be interpreted immediately by the terminal. Line breaks can execute commands.</p>
       <label class="opt-out"><input type="checkbox" bind:checked={disableWarnings} /> Don't show these warnings again</label>
     </div>
     <footer>
       <button type="button" onclick={closeWithoutPasting}>Cancel</button>
       <!-- svelte-ignore a11y_autofocus -- Enter should confirm this deliberate paste. -->
-      <button type="submit" value="confirm" class="primary" autofocus>Paste</button>
+      <button type="submit" value="confirm" class="primary" disabled={editedText.length === 0} autofocus>Paste</button>
     </footer>
   </form>
 </dialog>
@@ -109,7 +118,17 @@
     color: var(--text-primary);
     font-weight: 500;
   }
-  pre {
+  .text-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+    font-size: var(--ui-font-small);
+  }
+  textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 80px;
     max-height: 180px;
     margin: 0 0 12px;
     padding: 10px;
@@ -120,6 +139,7 @@
     font: var(--ui-font-small)/1.45 ui-monospace, "SF Mono", Menlo, monospace;
     white-space: pre-wrap;
     overflow: auto;
+    resize: vertical;
   }
   .warning {
     color: var(--status-warning);
@@ -152,8 +172,11 @@
     font: inherit;
     cursor: default;
   }
-  button:hover {
+  button:hover:not(:disabled) {
     background: var(--control-hover);
+  }
+  button:disabled {
+    opacity: 0.5;
   }
   button.primary {
     border-color: var(--accent);

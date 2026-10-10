@@ -68,7 +68,6 @@
     splitTerminalInput,
     terminalRightClickAction,
     type TerminalInputEvent,
-    type TerminalPasteInfo,
   } from "./terminalInput";
   import {
     liveBroadcastPasteGenerationError,
@@ -184,13 +183,13 @@
   let dropTargetId = $derived(processInstanceId === null ? undefined : `terminal-drop-${processInstanceId}`);
   let dropError = $state("");
   let pasteError = $state("");
-  let pasteConfirmation = $state<({
+  let pasteConfirmation = $state<{
     sessionId: number;
     processInstanceId: number | null;
     broadcastGeneration: number;
     broadcastRecipientCount: number | null;
     text: string;
-  } & TerminalPasteInfo) | null>(null);
+  } | null>(null);
   const shortcutPlatform = currentPlatform();
 
   function clampFontSize(size: number): number {
@@ -366,16 +365,15 @@
       broadcastGeneration: targetBroadcastState.generation,
       broadcastRecipientCount: targetBroadcastState.recipientCount,
       text,
-      ...pasteInfo,
     };
     onpasteconfirmationchange(true);
   }
 
-  function finishPasteConfirmation(confirmed: boolean, disableWarnings: boolean) {
+  function finishPasteConfirmation(text: string | null, disableWarnings: boolean) {
     const request = pasteConfirmation;
     pasteConfirmation = null;
     onpasteconfirmationchange(false);
-    if (!confirmed || request === null) {
+    if (text === null || text.length === 0 || request === null) {
       return;
     }
     if (!isTerminalTargetCurrent(request, sessionId, processInstanceId)) {
@@ -397,7 +395,7 @@
     }
     // Keep the approved text on xterm's paste path so bracketed paste and
     // terminal line-ending behavior remain intact.
-    terminal.paste(request.text);
+    terminal.paste(text);
   }
 
   function handleTerminalContextMenu(event: MouseEvent) {
@@ -967,11 +965,9 @@
 
 {#if pasteConfirmation}
   <TerminalPasteConfirmDialog
-    lineCount={pasteConfirmation.lineCount}
-    byteCount={pasteConfirmation.byteCount}
+    text={pasteConfirmation.text}
     sessionLabel={sessionLabel}
     recipientCount={pasteConfirmation.broadcastRecipientCount}
-    preview={pasteConfirmation.preview}
     onclose={finishPasteConfirmation}
   />
 {/if}
