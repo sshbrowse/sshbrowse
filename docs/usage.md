@@ -16,8 +16,10 @@ Your system's OpenSSH handles authentication, host keys, and SSH configuration.
 - **Find in Terminal…** searches the selected pane. Use Cmd+F on macOS or
   Ctrl+Shift+F on Linux and Windows. Adjust retained history in
   **Settings > Terminal > Scrollback lines**.
-- Broadcast sends commands or live input to multiple terminals. Check the
-  selected recipients before sending.
+- Broadcast sends commands or live input to multiple terminals. Choose the mode
+  and use the recipient menu to select the tab scope and individual terminals.
+  Check the visible recipient count before sending. Live input requires at least
+  two live terminals, including the focused terminal; use **Stop** to end it.
 
 ## Backup and restore
 
@@ -33,3 +35,14 @@ SSH keys and OpenSSH configuration must be moved separately; update key paths
 on the new computer. Keep backups private. Each import saves the previous setup
 to `before-import.sshbrowse.json`, overwritten by the next import. Import it
 with **Replace saved connections** to recover your setup.
+
+## Appearance
+
+Settings > Appearance includes compact theme previews, terminal font and color
+controls, and interface sizing. Classic Graphite is the default; saved theme
+choices are retained. Custom lets you choose surface, accent, and terminal
+background colors. Text and ANSI colors adjust for readability. Select Follow
+interface to use the custom terminal background, or Neutral black to keep it
+black. Custom colors are included in Backup & restore; older backups use the
+default custom palette. Restoring new backups with preferences requires a
+version of SSHBrowse that supports custom palettes.

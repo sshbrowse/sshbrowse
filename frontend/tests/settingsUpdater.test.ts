@@ -15,6 +15,7 @@ test("Settings shows check, download, retry, and restart controls for each updat
   const code = compiled
     .replace(/^import BackupPanel from .*;$/gm, "const BackupPanel = () => {};")
     .replace(/^import (ArrowLeft|Check|X) from .*;$/gm, "const $1 = () => {};")
+    .replace('from "./customPalette"', `from ${JSON.stringify(new URL("../src/lib/customPalette.ts", import.meta.url).href)}`)
     .replace('from "./updates"', `from ${JSON.stringify(new URL("../src/lib/updates.ts", import.meta.url).href)}`)
     .replace('from "./storage"', `from ${JSON.stringify(new URL("../src/lib/storage.ts", import.meta.url).href)}`);
   const directory = mkdtempSync(join(process.cwd(), "node_modules/.settings-updater-test-"));
@@ -26,6 +27,7 @@ test("Settings shows check, download, retry, and restart controls for each updat
       sessionsOpen: false,
       backupBusy: false,
       themeName: "classic",
+      customPalette: { surface: "#15191e", accent: "#c9ae79", terminal: "#101418" },
       terminalColors: "neutral",
       uiSize: "normal",
       interfaceScale: 1,

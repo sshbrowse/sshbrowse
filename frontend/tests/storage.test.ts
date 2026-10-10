@@ -1,3 +1,4 @@
+import { defaultCustomPalette } from "../src/lib/customPalette.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -55,6 +56,7 @@ test("current preferences load correctly", () => {
     collapsedFolders: { prod: true },
     terminalPasteWarningsDisabled: true,
     themeName: "oled",
+    customPalette: defaultCustomPalette,
     terminalColors: "neutral",
     uiSize: "large",
     terminalFontSize: 18,
@@ -75,6 +77,7 @@ test("missing preferences use defaults", () => {
     collapsedFolders: {},
     terminalPasteWarningsDisabled: false,
     themeName: "classic",
+    customPalette: defaultCustomPalette,
     terminalColors: "follow",
     uiSize: "standard",
     terminalFontSize: 14,
@@ -93,7 +96,7 @@ test("invalid preference values fall back to safe defaults", () => {
     [preferenceKeys.terminalScrollbackLines]: "broken",
     [preferenceKeys.collapsedFolders]: "{broken",
     [preferenceKeys.terminalPasteWarningsDisabled]: "maybe",
-    [preferenceKeys.themeName]: "custom",
+    [preferenceKeys.themeName]: "unknown",
     [preferenceKeys.terminalColors]: "custom",
     [preferenceKeys.uiSize]: "huge",
     [preferenceKeys.terminalFontSize]: "500",
@@ -112,6 +115,7 @@ test("invalid preference values fall back to safe defaults", () => {
     collapsedFolders: {},
     terminalPasteWarningsDisabled: false,
     themeName: "classic",
+    customPalette: defaultCustomPalette,
     terminalColors: "follow",
     uiSize: "standard",
     terminalFontSize: 14,
@@ -207,6 +211,7 @@ test("preference reads fall back safely when storage is unavailable", () => {
     collapsedFolders: {},
     terminalPasteWarningsDisabled: false,
     themeName: "classic",
+    customPalette: defaultCustomPalette,
     terminalColors: "follow",
     uiSize: "standard",
     terminalFontSize: 14,
@@ -214,4 +219,17 @@ test("preference reads fall back safely when storage is unavailable", () => {
     terminalFontName: "system",
   });
   savePreference(preferences, preferenceKeys.sidebarVisible, "false");
+});
+
+test("custom palettes survive storage and malformed values fall back safely", () => {
+  const palette = { surface: "#112233", accent: "#AABBCC", terminal: "#010203" };
+  const loaded = loadPreferences(storage({
+    [preferenceKeys.themeName]: "custom",
+    [preferenceKeys.customPalette]: JSON.stringify(palette),
+  }));
+  assert.equal(loaded.themeName, "custom");
+  assert.deepEqual(loaded.customPalette, { ...palette, accent: "#aabbcc" });
+  for (const value of ["broken", "null", "[]", '{}', '{"surface":"red","accent":"#123456","terminal":"#000000"}']) {
+    assert.deepEqual(loadPreferences(storage({ [preferenceKeys.customPalette]: value })).customPalette, defaultCustomPalette);
+  }
 });

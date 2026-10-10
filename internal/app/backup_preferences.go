@@ -20,7 +20,7 @@ var backupPreferenceRules = map[string]func(string) bool{
 	"sshbrowse.terminal.scrollbackLines":       integerPreference(0, 50000),
 	"sshbrowse.sidebar.collapsed":              collapsedFoldersPreference,
 	"sshbrowse.terminal.pasteWarningsDisabled": booleanPreference,
-	"sshbrowse.appearance.theme":               enumPreference("warm", "classic", "moss", "fjord", "oled", "contrast"),
+	"sshbrowse.appearance.theme":               enumPreference("warm", "classic", "moss", "fjord", "oled", "contrast", "custom"),
 	"sshbrowse.appearance.terminalColors":      enumPreference("follow", "neutral"),
 	"sshbrowse.appearance.uiSize":              enumPreference("standard", "large"),
 	"sshbrowse.appearance.terminalFontSize":    integerPreference(8, 32),
@@ -28,12 +28,28 @@ var backupPreferenceRules = map[string]func(string) bool{
 	"sshbrowse.appearance.terminalFontName":    enumPreference("system", "jetbrains", "menlo", "consolas", "dejavu"),
 }
 
+const customPalettePreferenceKey = "sshbrowse.appearance.customPalette"
+
 func validateBackupPreferences(preferences map[string]string) error {
-	if len(preferences) != len(backupPreferenceRules) {
-		return fmt.Errorf("backup must contain all %d portable preferences", len(backupPreferenceRules))
+	// Older version 1 backups predate the optional custom palette.
+	_, hasPalette := preferences[customPalettePreferenceKey]
+	expected := len(backupPreferenceRules)
+	if hasPalette {
+		expected++
+	}
+	if len(preferences) != expected || (!hasPalette && preferences["sshbrowse.appearance.theme"] == "custom") {
+		return fmt.Errorf("backup must contain all portable preferences")
+	}
+	for key := range backupPreferenceRules {
+		if _, ok := preferences[key]; !ok {
+			return fmt.Errorf("missing backup preference %q", key)
+		}
 	}
 	for key, value := range preferences {
 		valid, ok := backupPreferenceRules[key]
+		if key == customPalettePreferenceKey {
+			valid, ok = customPalettePreference, true
+		}
 		if !ok {
 			return fmt.Errorf("unsupported backup preference %q", key)
 		}
@@ -80,6 +96,19 @@ func collapsedFoldersPreference(value string) bool {
 			return false
 		}
 		seen[path] = true
+	}
+	return true
+}
+
+func customPalettePreference(value string) bool {
+	var palette map[string]string
+	if json.Unmarshal([]byte(value), &palette) != nil || len(palette) != 3 {
+		return false
+	}
+	for _, key := range []string{"surface", "accent", "terminal"} {
+		if _, ok := parseHexColour(palette[key]); !ok {
+			return false
+		}
 	}
 	return true
 }

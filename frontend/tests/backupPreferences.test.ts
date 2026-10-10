@@ -36,7 +36,7 @@ test("capture exports every effective preference and excludes the transient upda
   });
 
   const result = captureBackupPreferences(source);
-  assert.equal(Object.keys(result).length, 15);
+  assert.equal(Object.keys(result).length, 16);
   assert.equal(result[preferenceKeys.sidebarWidth], "360");
   assert.equal(result[preferenceKeys.sidebarVisible], "false");
   assert.equal(result[preferenceKeys.collapsedFolders], '["dev","prod"]');
@@ -165,4 +165,24 @@ test("null preferences leave storage untouched while still committing the import
   const result = await applyBackupPreferences(target, null, async () => "committed");
   assert.equal(result, "committed");
   assert.deepEqual(target.snapshot(), initial);
+});
+
+test("custom colors round-trip and old complete backups receive a default palette", async () => {
+  const palette = { surface: "#112233", accent: "#abcdee", terminal: "#000000" };
+  const captured = captureBackupPreferences(storage({
+    [preferenceKeys.themeName]: "custom",
+    [preferenceKeys.customPalette]: JSON.stringify(palette),
+  }));
+  const target = storage();
+  await applyBackupPreferences(target, captured, async () => undefined);
+  assert.equal(target.getItem(preferenceKeys.customPalette), JSON.stringify(palette));
+  assert.equal(target.getItem(preferenceKeys.themeName), "custom");
+
+  const current = captureBackupPreferences(storage());
+  const { [preferenceKeys.customPalette]: _palette, ...legacy } = current;
+  assert.deepEqual(validateBackupPreferences(legacy), current);
+  assert.throws(() => validateBackupPreferences({ ...legacy, [preferenceKeys.themeName]: "custom" }), /incomplete/);
+  for (const bad of ["null", "[]", '{"surface":"red","accent":"#123456","terminal":"#000000"}', JSON.stringify({ ...palette, extra: "#000000" })]) {
+    assert.throws(() => validateBackupPreferences({ ...current, [preferenceKeys.customPalette]: bad }), /invalid/);
+  }
 });

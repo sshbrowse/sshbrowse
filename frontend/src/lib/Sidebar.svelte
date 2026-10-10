@@ -716,7 +716,9 @@
   >
     <span class="copy">
       <span class="name">{connection.name}</span>
-      <span class="detail">{destinationLabel(connection)}</span>
+      {#if connection.name !== destinationLabel(connection)}
+        <span class="detail">{destinationLabel(connection)}</span>
+      {/if}
     </span>
     <button
       type="button"
@@ -956,12 +958,18 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    height: 40px;
+    height: var(--window-header-height, 40px);
     padding: 0 10px;
     border-bottom: 1px solid var(--sidebar-border);
   }
   :global(.app.mac-window-chrome) .header {
-    padding-left: 72px;
+    padding-left: calc(80px / var(--interface-scale));
+  }
+  :global(.app.mac-window-chrome) .header button {
+    max-height: calc(100% - 4px);
+  }
+  :global(.app.mac-window-chrome) .header-actions {
+    height: 100%;
   }
   :global(.app.linux-window-chrome) .header {
     --wails-draggable: no-drag;
@@ -1018,8 +1026,8 @@
     width: 100%;
     border: 1px solid transparent;
     background: none;
-    color: var(--sidebar-foreground);
-    font: var(--ui-font-body) var(--font-ui);
+    color: var(--sidebar-muted-foreground);
+    font: var(--ui-font-small) var(--font-ui);
     font-weight: 500;
     min-height: 32px;
     padding: 5px 8px 5px calc(8px + var(--row-depth) * 14px);
@@ -1046,7 +1054,7 @@
     min-height: 40px;
     padding: 4px 5px 4px calc(8px + var(--row-depth) * 14px);
     border: 1px solid transparent;
-    border-radius: 0;
+    border-radius: var(--radius-control);
     background: none;
     color: inherit;
     font: inherit;
@@ -1129,7 +1137,7 @@
   .name {
     overflow: hidden;
     color: var(--sidebar-foreground);
-    font-weight: 500;
+    font-weight: 400;
     text-overflow: ellipsis;
     white-space: nowrap;
   }

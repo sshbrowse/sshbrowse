@@ -4,6 +4,7 @@
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import Check from "@lucide/svelte/icons/check";
   import X from "@lucide/svelte/icons/x";
+  import { customThemeStyle, defaultCustomPalette, isHexColor, type CustomPalette } from "./customPalette";
   import type { TerminalColors, TerminalFontName, ThemeName } from "./appearance";
   import type { UpdateInfo } from "./menuEvents";
   import { terminalScrollbackMinimum, terminalScrollbackMaximum, type UiSize } from "./storage";
@@ -15,6 +16,7 @@
     onbackupcomplete,
     onbackupbusychange,
     themeName,
+    customPalette,
     terminalColors,
     uiSize,
     interfaceScale,
@@ -38,6 +40,7 @@
     ondownloadupdate,
     onrestartupdate,
     onthemechange,
+    oncustompalettechange,
     onterminalcolorschange,
     onuisizechange,
     oninterfacescalechange,
@@ -53,6 +56,7 @@
     onbackupcomplete: (preferencesChanged: boolean) => Promise<void>;
     onbackupbusychange: (busy: boolean) => void;
     themeName: ThemeName;
+    customPalette: CustomPalette;
     terminalColors: TerminalColors;
     uiSize: UiSize;
     interfaceScale: number;
@@ -76,6 +80,7 @@
     ondownloadupdate: () => void;
     onrestartupdate: () => void;
     onthemechange: (theme: ThemeName) => void;
+    oncustompalettechange: (palette: CustomPalette) => void;
     onterminalcolorschange: (colors: TerminalColors) => void;
     onuisizechange: (size: UiSize) => void;
     oninterfacescalechange: (scale: number) => void;
@@ -88,13 +93,25 @@
   } = $props();
 
   const themes: { name: ThemeName; label: string; description: string }[] = [
+    { name: "classic", label: "Classic Graphite", description: "Graphite · cool gray" },
     { name: "warm", label: "Warm", description: "Charcoal · amber" },
-    { name: "classic", label: "Classic", description: "Neutral slate" },
     { name: "moss", label: "Moss", description: "Charcoal · sage" },
     { name: "fjord", label: "Fjord", description: "Deep blue · teal" },
     { name: "oled", label: "OLED Black", description: "Pure black" },
     { name: "contrast", label: "High Contrast", description: "Clear edges · bright text" },
+    { name: "custom", label: "Custom", description: "Your own palette" },
   ];
+
+  const paletteFields: { key: keyof CustomPalette; label: string }[] = [
+    { key: "surface", label: "Surface" }, { key: "accent", label: "Accent" }, { key: "terminal", label: "Terminal" },
+  ];
+  let paletteDraft = $state({ ...defaultCustomPalette });
+  $effect(() => { paletteDraft = { ...customPalette }; });
+
+  function editPalette(key: keyof CustomPalette, value: string) {
+    paletteDraft[key] = value;
+    if (isHexColor(value)) oncustompalettechange({ ...customPalette, [key]: value.toLowerCase() });
+  }
 
   type Section = "general" | "appearance" | "terminal" | "data";
   const sectionLabels: Record<Section, string> = {
@@ -222,7 +239,7 @@
                     aria-pressed={themeName === theme.name}
                     onclick={() => onthemechange(theme.name)}
                   >
-                    <span class="preview" data-theme={theme.name} data-terminal-colors={terminalColors} aria-hidden="true">
+                    <span class="preview" data-theme={theme.name} data-terminal-colors={terminalColors} style={theme.name === "custom" ? customThemeStyle(customPalette, terminalColors === "neutral") : undefined} aria-hidden="true">
                       <span class="preview-chrome"><i></i><i></i></span>
                       <span class="preview-body">
                         <span class="preview-sidebar"><i></i><i class="selected"><b></b></i><i></i></span>
@@ -237,6 +254,63 @@
                   </button>
                 {/each}
               </div>
+            </section>
+            {#if themeName === "custom"}
+              <section aria-labelledby="custom-palette-heading">
+                <div class="section-heading">
+                  <h2 id="custom-palette-heading">Custom palette</h2>
+                  <p>Text and terminal colors adjust automatically for contrast.</p>
+                </div>
+                <div class="palette-controls">
+                  {#each paletteFields as field}
+                    <div class="palette-field">
+                      <label for={`palette-${field.key}`}>{field.label}</label>
+                      <div class="palette-inputs">
+                        <input type="color" aria-label={`${field.label} color`} value={customPalette[field.key]} oninput={(event) => editPalette(field.key, event.currentTarget.value)} />
+                        <input id={`palette-${field.key}`} class="hex-input" type="text" maxlength="7" spellcheck="false" aria-invalid={!isHexColor(paletteDraft[field.key])} aria-describedby="palette-hint" value={paletteDraft[field.key]} oninput={(event) => editPalette(field.key, event.currentTarget.value)} />
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+                <p id="palette-hint" class="hint">Use six-digit hex colors. Accent is adjusted when needed for contrast. Terminal color applies when Follow interface is selected.</p>
+                <button class="update-button palette-reset" type="button" onclick={() => oncustompalettechange({ ...defaultCustomPalette })}>Reset palette</button>
+              </section>
+            {/if}
+            <section aria-labelledby="terminal-text-heading">
+              <div class="section-heading">
+                <h2 id="terminal-text-heading">Terminal display</h2>
+                <p>Set text and colors for terminal panes.</p>
+              </div>
+              <div class="setting-group">
+                <div class="setting-row">
+                  <div><strong>Terminal font</strong><span>Installed fonts are used; missing fonts fall back to the system monospace</span></div>
+                  <div class="select-control">
+                    <select aria-label="Terminal font" value={terminalFontName} onchange={(event) => onterminalfontchange(event.currentTarget.value as TerminalFontName)}>
+                      <option value="system">System monospace</option>
+                      <option value="jetbrains">JetBrains Mono</option>
+                      <option value="menlo">Menlo</option>
+                      <option value="consolas">Consolas</option>
+                      <option value="dejavu">DejaVu Sans Mono</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div><strong>Terminal size</strong><span>Default size for new and unadjusted panes</span></div>
+                  <div class="stepper" role="group" aria-label="Terminal default font size">
+                    <button type="button" aria-label="Decrease terminal default font size" disabled={terminalFontSize <= 8} onclick={() => onterminalfontsizechange(terminalFontSize - 1)}>−</button>
+                    <output aria-live="polite">{terminalFontSize} px</output>
+                    <button type="button" aria-label="Increase terminal default font size" disabled={terminalFontSize >= 32} onclick={() => onterminalfontsizechange(terminalFontSize + 1)}>+</button>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div><strong>Terminal colors</strong><span>Use the interface palette or keep a neutral black terminal</span></div>
+                  <div class="segmented" role="group" aria-label="Terminal colors">
+                    <button type="button" aria-pressed={terminalColors === "follow"} class:active={terminalColors === "follow"} onclick={() => onterminalcolorschange("follow")}>Follow interface</button>
+                    <button type="button" aria-pressed={terminalColors === "neutral"} class:active={terminalColors === "neutral"} onclick={() => onterminalcolorschange("neutral")}>Neutral black</button>
+                  </div>
+                </div>
+              </div>
+              <p class="hint">Font shortcuts adjust the selected pane, or all Live input recipients. Reset returns each pane to this default size.</p>
             </section>
             <section aria-labelledby="type-heading">
               <div class="section-heading">
@@ -260,40 +334,6 @@
                   </div>
                 </div>
               </div>
-            </section>
-            <section aria-labelledby="terminal-text-heading">
-              <div class="section-heading">
-                <h2 id="terminal-text-heading">Terminal display</h2>
-                <p>Set text and colors for terminal panes.</p>
-              </div>
-              <div class="setting-group">
-                <div class="setting-row">
-                  <div><strong>Terminal font</strong><span>Installed fonts are used; missing fonts fall back to the system monospace</span></div>
-                  <select aria-label="Terminal font" value={terminalFontName} onchange={(event) => onterminalfontchange(event.currentTarget.value as TerminalFontName)}>
-                    <option value="system">System monospace</option>
-                    <option value="jetbrains">JetBrains Mono</option>
-                    <option value="menlo">Menlo</option>
-                    <option value="consolas">Consolas</option>
-                    <option value="dejavu">DejaVu Sans Mono</option>
-                  </select>
-                </div>
-                <div class="setting-row">
-                  <div><strong>Terminal size</strong><span>Default size for new and unadjusted panes</span></div>
-                  <div class="stepper" role="group" aria-label="Terminal default font size">
-                    <button type="button" aria-label="Decrease terminal default font size" disabled={terminalFontSize <= 8} onclick={() => onterminalfontsizechange(terminalFontSize - 1)}>−</button>
-                    <output aria-live="polite">{terminalFontSize} px</output>
-                    <button type="button" aria-label="Increase terminal default font size" disabled={terminalFontSize >= 32} onclick={() => onterminalfontsizechange(terminalFontSize + 1)}>+</button>
-                  </div>
-                </div>
-                <div class="setting-row">
-                  <div><strong>Terminal colors</strong><span>Use the interface palette or keep a neutral black terminal</span></div>
-                  <div class="segmented" role="group" aria-label="Terminal colors">
-                    <button type="button" aria-pressed={terminalColors === "follow"} class:active={terminalColors === "follow"} onclick={() => onterminalcolorschange("follow")}>Follow interface</button>
-                    <button type="button" aria-pressed={terminalColors === "neutral"} class:active={terminalColors === "neutral"} onclick={() => onterminalcolorschange("neutral")}>Neutral black</button>
-                  </div>
-                </div>
-              </div>
-              <p class="hint">Font shortcuts adjust the selected pane, or all Live input recipients. Reset returns each pane to this default size.</p>
             </section>
           {/if}
           {#if selectedSection === "terminal"}
@@ -365,7 +405,7 @@
   .nav-heading strong { color: var(--text-primary); font-size: var(--ui-font-heading); font-weight: 500; }
   .nav-links { display: flex; flex-direction: column; gap: 4px; padding: 18px 10px; }
   .nav-links button, .back {
-    min-height: 42px;
+    min-height: 36px;
     padding: 8px 12px;
     border: 0;
     border-radius: var(--radius-control);
@@ -396,7 +436,7 @@
   }
   .close:hover { background: var(--control-hover); color: var(--text-primary); }
   .page-content { flex: 1; min-height: 0; overflow-y: auto; padding: 52px clamp(24px, 4vw, 64px) 80px; }
-  .page-inner { max-width: 960px; margin: 0 auto; }
+  .page-inner { max-width: 760px; margin: 0 auto; }
   .page-inner.backup-page { max-width: 760px; }
   .backup-page h1 { margin-bottom: 12px; }
   h1 { margin: 0 0 28px; font-size: var(--ui-font-title); font-weight: 500; line-height: 1.25; letter-spacing: -0.02em; }
@@ -405,7 +445,7 @@
   .section-heading { margin-bottom: 16px; }
   h2 { margin: 0 0 5px; font-size: var(--ui-font-heading); font-weight: 500; }
   .section-heading p, .hint { margin: 0; color: var(--text-secondary); font-size: var(--ui-font-small); }
-  .theme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 12px; max-width: 820px; }
+  .theme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 156px), 1fr)); gap: 10px; max-width: 760px; }
   .theme-card {
     min-width: 0;
     padding: 9px;
@@ -418,10 +458,10 @@
     cursor: default;
   }
   .theme-card:hover { background: var(--surface-raised); }
-  .theme-card.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .theme-card.selected { border-color: var(--accent); box-shadow: none; }
   .preview {
     display: flex;
-    height: 116px;
+    height: 64px;
     flex-direction: column;
     overflow: hidden;
     border: 1px solid var(--border-subtle);
@@ -432,7 +472,7 @@
   .preview-chrome i { width: 22%; height: 2px; border-radius: 2px; background: var(--chrome-foreground); opacity: .7; }
   .preview-chrome i:last-child { width: 8%; }
   .preview-body { display: flex; flex: 1; min-height: 0; }
-  .preview-sidebar { display: flex; flex: none; flex-direction: column; gap: 5px; width: 28%; padding: 9px 6px; background: var(--sidebar); }
+  .preview-sidebar { display: flex; flex: none; flex-direction: column; gap: 3px; width: 28%; padding: 5px 6px; background: var(--sidebar); }
   .preview-sidebar i { display: flex; align-items: center; height: 10px; padding: 0 4px; border-radius: 2px; }
   .preview-sidebar i::after { width: 72%; height: 2px; border-radius: 2px; background: var(--sidebar-muted-foreground); content: ""; opacity: .85; }
   .preview-sidebar i:nth-child(3)::after { width: 55%; }
@@ -444,7 +484,7 @@
   .preview-toolbar i { width: 16%; height: 4px; border-radius: 2px; background: var(--toolbar-foreground); opacity: .55; }
   .preview-toolbar i:first-child { width: 24%; height: 7px; background: var(--accent); opacity: .9; }
   .preview-toolbar i:last-child { margin-left: auto; }
-  .preview-terminal { display: flex; flex: 1; flex-direction: column; gap: 6px; padding: 9px 8px; background: var(--terminal-background); }
+  .preview-terminal { display: flex; flex: 1; flex-direction: column; gap: 4px; padding: 5px 8px; background: var(--terminal-background); }
   .preview-terminal i { display: block; height: 2px; border-radius: 2px; background: var(--terminal-foreground); opacity: .58; }
   .preview-terminal i:nth-child(1) { width: 65%; }
   .preview-terminal i:nth-child(2) { width: 48%; }
@@ -452,10 +492,10 @@
   .card-label { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 9px; font-weight: 500; }
   .card-description { display: block; margin-top: 2px; color: var(--text-secondary); font-size: var(--ui-font-small); }
   .selected-mark { color: var(--accent); }
-  .setting-group { overflow: hidden; border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface); }
-  .setting-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; min-height: 74px; padding: 12px 16px; }
+  .setting-group { border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); }
+  .setting-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; padding: 12px 0; }
   .setting-row + .setting-row { border-top: 1px solid var(--border-subtle); }
-  .setting-row > div:first-child { flex: 1 1 340px; min-width: 0; }
+  .setting-row > div:first-child { flex: 1 1 240px; min-width: 0; }
   .setting-row strong, .setting-row span { display: block; }
   .setting-row strong { font-weight: 400; }
   .setting-row div:first-child span { margin-top: 3px; color: var(--text-secondary); font-size: var(--ui-font-small); }
@@ -471,12 +511,13 @@
   .segmented button, .stepper button { min-height: 34px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text-secondary); font: inherit; cursor: default; }
   .segmented button:hover, .stepper button:hover:not(:disabled) { background: var(--control-hover); color: var(--text-primary); }
   .segmented button.active { background: var(--selection); color: var(--text-primary); }
-  select {
+  .select-control {
     flex: none;
     width: min(100%, 240px);
+  }
+  select {
     min-width: 0;
-    min-height: 38px;
-    padding: 0 10px;
+    padding: 7px 32px 7px 10px;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
     background: var(--input-surface);
@@ -486,6 +527,14 @@
   .stepper button { min-width: 34px; font-size: 20px; }
   .stepper button:disabled { opacity: .45; }
   output { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
+  .palette-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+  .palette-field label { display: block; margin-bottom: 8px; font-size: var(--ui-font-small); color: var(--text-secondary); }
+  .palette-inputs { display: flex; align-items: center; gap: 8px; }
+  .palette-inputs input { height: 36px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--input-surface); color: var(--text-primary); }
+  .palette-inputs input[type="color"] { width: 40px; padding: 3px; }
+  .hex-input { width: 104px; min-width: 0; padding: 0 8px; font: var(--ui-font-small) ui-monospace, monospace; }
+  .hex-input[aria-invalid="true"] { border-color: var(--status-error); }
+  .palette-reset { margin-top: 12px; }
   .hint { margin-top: 12px; line-height: 1.4; }
   .switch {
     display: flex;

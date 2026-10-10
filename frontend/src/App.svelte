@@ -23,6 +23,7 @@
   import SettingsPage from "./lib/SettingsPage.svelte";
   import UpdateNotice from "./lib/UpdateNotice.svelte";
   import { canCheckForUpdates, claimStartupUpdateCheck, githubReleaseURL, type UpdateCheckResult, type UpdateRelease } from "./lib/updates";
+  import { applyCustomTheme, customThemeProperties, defaultCustomPalette, type CustomPalette } from "./lib/customPalette";
   import type { TerminalColors, TerminalFontName, ThemeName } from "./lib/appearance";
   import {
     currentPlatform,
@@ -167,6 +168,7 @@
   let rightClickToPaste = $state(false);
   let copyOnSelection = $state(true);
   let themeName = $state<ThemeName>("classic");
+  let customPalette = $state<CustomPalette>({ ...defaultCustomPalette });
   let terminalColors = $state<TerminalColors>("follow");
   let uiSize = $state<UiSize>("standard");
   let terminalFontSize = $state(14);
@@ -453,6 +455,7 @@
     themeName = nextTheme;
     document.documentElement.dataset.theme = nextTheme;
     persistPreference(preferenceKeys.themeName, nextTheme);
+    applyCustomTheme(document.documentElement, customPalette, nextTheme === "custom", terminalColors === "neutral");
     updateWindowsChrome(nextTheme);
   }
 
@@ -460,11 +463,24 @@
     terminalColors = nextColors;
     document.documentElement.dataset.terminalColors = nextColors;
     persistPreference(preferenceKeys.terminalColors, nextColors);
+    applyCustomTheme(document.documentElement, customPalette, themeName === "custom", nextColors === "neutral");
+  }
+
+  function setCustomPalette(palette: CustomPalette) {
+    customPalette = palette;
+    persistPreference(preferenceKeys.customPalette, JSON.stringify(palette));
+    applyCustomTheme(document.documentElement, palette, themeName === "custom", terminalColors === "neutral");
+    updateWindowsChrome(themeName);
   }
 
   function updateWindowsChrome(appearance: ThemeName) {
     if (shortcutPlatform === "windows") {
-      Events.Emit("window:appearanceTheme", appearance).catch((error) =>
+      const roles = customThemeProperties(customPalette);
+      const payload = appearance === "custom" ? {
+        background: roles.chrome, text: roles["chrome-foreground"],
+        inactiveText: roles["text-muted"], border: roles["chrome-border"],
+      } : appearance;
+      Events.Emit("window:appearanceTheme", payload).catch((error) =>
         console.error("Could not update the Windows title bar", error),
       );
     }
@@ -1306,6 +1322,7 @@
       copyOnSelection = preferences.copyOnSelection;
       checkUpdatesOnStartup = preferences.checkUpdatesOnStartup;
       themeName = preferences.themeName;
+      customPalette = preferences.customPalette;
       terminalColors = preferences.terminalColors;
       uiSize = preferences.uiSize;
       terminalFontSize = preferences.terminalFontSize;
@@ -1315,6 +1332,7 @@
       document.documentElement.dataset.terminalColors = terminalColors;
       document.documentElement.dataset.uiSize = uiSize;
       interfaceScale = preferences.interfaceScale;
+      applyCustomTheme(document.documentElement, customPalette, themeName === "custom", terminalColors === "neutral");
     } catch {
       // Preferences are optional; use the safe defaults when storage is unavailable.
     }
@@ -1649,13 +1667,13 @@
         class="toolbar-action"
         class:active={tilingMode}
         aria-pressed={tilingMode}
-        aria-label="Open in tiles"
+        aria-label="Tile new sessions"
         title="Open new sessions in the active workspace, up to 9 per tab"
         onclick={toggleTilingMode}
         onpointerdown={(event) => event.preventDefault()}
       >
         <LayoutGrid size={16} />
-        <span class="toolbar-label">Open in tiles</span>
+        <span class="toolbar-label">Tile new sessions</span>
         <span class="toolbar-check" aria-hidden="true"><Check size={14} /></span>
       </button>
       <button
@@ -1783,6 +1801,7 @@
               {rightClickToPaste}
               {copyOnSelection}
               {themeName}
+              {customPalette}
               {terminalColors}
               {terminalFontName}
               defaultFontSize={terminalFontSize}
@@ -1838,6 +1857,7 @@
       onbackupcomplete={completeBackupImport}
       onbackupbusychange={(busy) => { backupBusy = busy; }}
       {themeName}
+      {customPalette}
       {terminalColors}
       {uiSize}
       {interfaceScale}
@@ -1861,6 +1881,7 @@
       ondownloadupdate={emitDownloadUpdate}
       onrestartupdate={emitRestartUpdate}
       onthemechange={setThemeName}
+      oncustompalettechange={setCustomPalette}
       onterminalcolorschange={setTerminalColors}
       onuisizechange={setUiSize}
       oninterfacescalechange={setInterfaceScale}
@@ -1927,12 +1948,17 @@
 <style>
   .app {
     --interface-scale: 1;
+    --window-header-height: 40px;
     position: relative;
     display: flex;
     height: 100vh;
     background: var(--chrome);
     color: var(--chrome-foreground);
     font: var(--ui-font-body) var(--font-ui);
+  }
+  .app.mac-window-chrome {
+    /* AppKit's window buttons do not scale with the web interface. */
+    --window-header-height: calc(40px / var(--interface-scale));
   }
   .app.desktop-menu {
     display: grid;
@@ -2038,7 +2064,7 @@
     display: flex;
     flex: none;
     min-width: 0;
-    height: 40px;
+    height: var(--window-header-height);
     border-bottom: 1px solid var(--toolbar-border);
     background: var(--toolbar);
   }
@@ -2047,7 +2073,7 @@
     padding-left: 0;
   }
   :global(.app.mac-window-chrome) .toolbar.inset {
-    padding-left: 72px;
+    padding-left: calc(80px / var(--interface-scale));
   }
   .toolbar button {
     --wails-draggable: no-drag;
@@ -2078,7 +2104,7 @@
   .sidebar-toggle {
     display: grid;
     width: 40px;
-    height: 40px;
+    height: 100%;
     flex: none;
     place-items: center;
     border: 0;
@@ -2107,7 +2133,7 @@
     align-items: center;
     justify-content: center;
     gap: 5px;
-    height: 40px;
+    height: 100%;
     padding: 0 9px;
     border: 0;
     border-left: 0;

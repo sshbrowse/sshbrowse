@@ -33,11 +33,7 @@ func registerWindowsChromeUpdates(wailsApp *application.App, window *application
 		})
 	}
 	wailsApp.Event.On(EventWindowAppearanceTheme, func(event *application.CustomEvent) {
-		name, ok := event.Data.(string)
-		if !ok {
-			return
-		}
-		selected, ok := windowsChromePalettes[name]
+		selected, ok := windowsChromeColoursFor(event.Data)
 		if !ok {
 			return
 		}

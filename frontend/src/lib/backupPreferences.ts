@@ -1,3 +1,4 @@
+import { defaultCustomPalette, isCustomPalette } from "./customPalette.ts";
 import { loadPreferences, preferenceKeys, type PreferenceStorage } from "./storage.ts";
 
 export type BackupPreferenceMap = Record<string, string>;
@@ -14,6 +15,7 @@ const transferableKeys = [
   preferenceKeys.collapsedFolders,
   preferenceKeys.terminalPasteWarningsDisabled,
   preferenceKeys.themeName,
+  preferenceKeys.customPalette,
   preferenceKeys.terminalColors,
   preferenceKeys.uiSize,
   preferenceKeys.terminalFontSize,
@@ -55,6 +57,7 @@ function canonicalPreferences(preferences: ReturnType<typeof loadPreferences>): 
     [preferenceKeys.collapsedFolders]: JSON.stringify(Object.keys(preferences.collapsedFolders).sort()),
     [preferenceKeys.terminalPasteWarningsDisabled]: String(preferences.terminalPasteWarningsDisabled),
     [preferenceKeys.themeName]: preferences.themeName,
+    [preferenceKeys.customPalette]: JSON.stringify(preferences.customPalette),
     [preferenceKeys.terminalColors]: preferences.terminalColors,
     [preferenceKeys.uiSize]: preferences.uiSize,
     [preferenceKeys.terminalFontSize]: String(preferences.terminalFontSize),
@@ -117,7 +120,9 @@ function isValidPreferenceValue(key: string, value: string): boolean {
         && new Set(folders).size === folders.length;
     }
     case preferenceKeys.themeName:
-      return ["warm", "classic", "moss", "fjord", "oled", "contrast"].includes(value);
+      return ["warm", "classic", "moss", "fjord", "oled", "contrast", "custom"].includes(value);
+    case preferenceKeys.customPalette:
+      try { return isCustomPalette(JSON.parse(value)); } catch { return false; }
     case preferenceKeys.terminalColors:
       return value === "follow" || value === "neutral";
     case preferenceKeys.uiSize:
@@ -133,13 +138,16 @@ function isValidPreferenceValue(key: string, value: string): boolean {
   }
 }
 
-/** Require a complete, exact set so restore never relies on permissive defaults. */
+/** Require the complete known set, while accepting backups from before custom palettes. */
 export function validateBackupPreferences(input: unknown): BackupPreferenceMap {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Backup preferences must be an object.");
   }
   const entries = Object.entries(input);
-  if (entries.length !== transferableKeys.length) {
+  const legacy = entries.length === transferableKeys.length - 1
+    && !Object.hasOwn(input, preferenceKeys.customPalette)
+    && (input as Record<string, unknown>)[preferenceKeys.themeName] !== "custom";
+  if (entries.length !== transferableKeys.length && !legacy) {
     throw new Error("Backup preferences are incomplete or contain unsupported settings.");
   }
 
@@ -155,6 +163,7 @@ export function validateBackupPreferences(input: unknown): BackupPreferenceMap {
     }
     preferences[key] = value;
   }
+  if (legacy) preferences[preferenceKeys.customPalette] = JSON.stringify(defaultCustomPalette);
   for (const key of transferableKeys) {
     if (!Object.hasOwn(preferences, key)) {
       throw new Error(`Backup preference ${key} is missing.`);

@@ -89,7 +89,7 @@
   }
   h2 {
     margin: 0;
-    font-size: var(--ui-font-heading);
+    font-size: var(--ui-font-dialog-title);
     font-weight: 500;
     letter-spacing: -0.02em;
   }
