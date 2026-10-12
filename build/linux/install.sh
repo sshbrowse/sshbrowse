@@ -17,10 +17,14 @@ trap 'rm -rf -- "$stage"' EXIT
 cd -- "$stage"
 repository=https://github.com/sshbrowse/sshbrowse
 release="$(fetch -o /dev/null -w '%{url_effective}' "$repository/releases/latest")"
+tag="${release##*/}"
+[[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Could not resolve a stable SSHBrowse release.' >&2; exit 1; }
 download="${release/\/tag\//\/download\/}"
 fetch "$download/SHA256SUMS" -o SHA256SUMS
+fetch "$download/SSHBrowse-Linux-x86_64" -o SSHBrowse-Linux-x86_64
+# Keep the repository icon aligned with the selected binary release.
+fetch "https://raw.githubusercontent.com/sshbrowse/sshbrowse/$tag/build/appicon.png" -o sshbrowse.png
 for asset in SSHBrowse-Linux-x86_64 sshbrowse.png; do
-  fetch "$download/$asset" -o "$asset"
   awk -v file="$asset" '$2 == file { print; found = 1; exit } END { exit !found }' SHA256SUMS | sha256sum --check -
 done
 chmod 0755 SSHBrowse-Linux-x86_64

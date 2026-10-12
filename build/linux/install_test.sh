@@ -28,8 +28,11 @@ if [[ "$url" == https://github.com/sshbrowse/sshbrowse/releases/latest ]]; then
   printf 'https://github.com/sshbrowse/sshbrowse/releases/tag/v1.2.3'
   exit 0
 fi
-[[ "$url" == https://github.com/sshbrowse/sshbrowse/releases/download/v1.2.3/* ]] || exit 2
-asset="${url##*/}"
+case "$url" in
+  https://raw.githubusercontent.com/sshbrowse/sshbrowse/v1.2.3/build/appicon.png) asset=sshbrowse.png ;;
+  https://github.com/sshbrowse/sshbrowse/releases/download/v1.2.3/SHA256SUMS|https://github.com/sshbrowse/sshbrowse/releases/download/v1.2.3/SSHBrowse-Linux-x86_64) asset="${url##*/}" ;;
+  *) exit 2 ;;
+esac
 [[ "$asset" != "${SSHBROWSE_TEST_FAIL:-}" ]] || exit 22
 cp -- "$SSHBROWSE_TEST_ASSETS/$asset" "$output"
 SH
