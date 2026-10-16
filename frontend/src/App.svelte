@@ -134,6 +134,8 @@
   type AppSession = Session & { autofocus: boolean };
   type TerminalPaneComponent = typeof import("./lib/TerminalPane.svelte")["default"];
 
+  const manualUpdateCheckMinimumDurationMs = 1000;
+
   let sessions = $state<AppSession[]>([]);
   let tabs = $state<Tab[]>([]);
   let activeId = $state<number | null>(null);
@@ -208,6 +210,8 @@
   let updateStatus = $state("");
   let updateError = $state(false);
   let updateBusy = $state(false);
+  let updateCheckStartedAt = 0;
+  let updateCheckResultTimer: ReturnType<typeof setTimeout> | null = null;
   let updateAvailable = $state(false);
   let updateReady = $state(false);
   let checkUpdatesOnStartup = $state(true);
@@ -1480,34 +1484,55 @@
     });
     const offUpdateCheckResult = Events.On(updateCheckResultEvent, (event: { data: UpdateCheckResult }) => {
       const result = event.data;
-      if (!result.automatic) {
-        startupPromptWanted = false;
-        updatePrompt = null;
-      }
-      // A late background result must not replace a manual check or download.
-      if (result.automatic && (!startupPromptWanted || updateBusy || updateReady)) return;
-      if (result.error) {
+      const applyResult = () => {
         if (!result.automatic) {
-          updateStatus = `Update check failed: ${result.error}`;
-          updateError = true;
-          if (result.checked) updateBusy = false;
+          startupPromptWanted = false;
+          updatePrompt = null;
         }
-        return;
-      }
-      if (!result.checked) return;
-      updateStatus = result.version ? `Version ${result.version} is available.` : "SSHBrowse is up to date.";
-      updateAvailable = Boolean(result.version);
-      updateError = false;
-      updateBusy = false;
-      updateReleaseURL = "";
-      if (result.version) {
-        updateReleaseURL = githubReleaseURL(result.releaseURL);
-        if (result.automatic && startupPromptWanted && checkUpdatesOnStartup && updateReleaseURL) {
-          updatePrompt = { version: result.version, releaseURL: updateReleaseURL };
+        // A late background result must not replace a manual check or download.
+        if (result.automatic && (!startupPromptWanted || updateBusy || updateReady)) return;
+        if (result.error) {
+          if (!result.automatic) {
+            updateStatus = `Update check failed: ${result.error}`;
+            updateError = true;
+            if (result.checked) updateBusy = false;
+          }
+          return;
+        }
+        if (!result.checked) return;
+        updateStatus = result.version ? `Version ${result.version} is available.` : "SSHBrowse is up to date.";
+        updateAvailable = Boolean(result.version);
+        updateError = false;
+        updateBusy = false;
+        updateReleaseURL = "";
+        if (result.version) {
+          updateReleaseURL = githubReleaseURL(result.releaseURL);
+          if (result.automatic && startupPromptWanted && checkUpdatesOnStartup && updateReleaseURL) {
+            updatePrompt = { version: result.version, releaseURL: updateReleaseURL };
+          }
+        }
+      };
+
+      if (!result.automatic && result.checked) {
+        const startedAt = updateCheckStartedAt || Date.now();
+        updateCheckStartedAt = 0;
+        const remaining = Math.max(0, manualUpdateCheckMinimumDurationMs - (Date.now() - startedAt));
+        if (remaining > 0) {
+          updateCheckResultTimer = setTimeout(() => {
+            updateCheckResultTimer = null;
+            applyResult();
+          }, remaining);
+          return;
         }
       }
+      applyResult();
     });
     const offUpdateStarted = Events.On(updateCheckStartedEvent, () => {
+      if (updateCheckResultTimer !== null) {
+        clearTimeout(updateCheckResultTimer);
+        updateCheckResultTimer = null;
+      }
+      updateCheckStartedAt = Date.now();
       startupPromptWanted = false;
       updatePrompt = null;
       updateStatus = "Checking for updates…";
@@ -1583,6 +1608,7 @@
       offInstalling();
       offUpdateReady();
       offUpdateError();
+      if (updateCheckResultTimer !== null) clearTimeout(updateCheckResultTimer);
       window.removeEventListener("keydown", onKeydown);
       window.removeEventListener("blur", handleWindowBlur);
     };

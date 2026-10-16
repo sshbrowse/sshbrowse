@@ -23,11 +23,17 @@ visit(ast);
 function app(storageUnavailable = false) {
   const values = new Map<string, string>();
   const emitted: string[] = [];
+  const timers = new Map<number, () => void>();
+  const timerDelays: number[] = [];
+  let nextTimerId = 1;
   const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
   const state = {
     updateInfo: null, startupCheckScheduled: false, checkUpdatesOnStartup: true,
     startupPromptWanted: true, updatePrompt: null, updateStatus: "", updateError: false,
     updateBusy: false, updateAvailable: false, updateReady: false, updateReleaseURL: "",
+    updateCheckStartedAt: 0, updateCheckResultTimer: null, manualUpdateCheckMinimumDurationMs: 1000,
+    setTimeout: (callback: () => void, delay: number) => { const id = nextTimerId++; timers.set(id, callback); timerDelays.push(delay); return id; },
+    clearTimeout: (id: number) => { timers.delete(id); },
     canCheckForUpdates, claimStartupUpdateCheck, githubReleaseURL,
     startupUpdateCheckEvent: "update:startup-check",
     Events: { Emit: (name: string) => { emitted.push(name); return Promise.resolve(); } },
@@ -42,7 +48,12 @@ function app(storageUnavailable = false) {
     const code = ts.transpile(`(${callback})(event)`, { target: ts.ScriptTarget.ES2022 });
     vm.runInContext(code, context);
   }
-  return { state, send, emitted };
+  function runTimers() {
+    const pending = [...timers.values()];
+    timers.clear();
+    for (const callback of pending) callback();
+  }
+  return { state, send, emitted, runTimers, timerDelays, timers };
 }
 const release = { automatic: true, checked: true, version: "2.0.0", releaseURL: "https://github.com/sshbrowse/sshbrowse/releases/tag/v2.0.0", error: "" };
 
@@ -90,16 +101,18 @@ test("automatic results show a notice only for a validated release and an enable
 });
 
 test("manual results report failures and success even with startup checks disabled", () => {
-  const { state, send } = app();
+  const { state, send, runTimers } = app();
   state.checkUpdatesOnStartup = false;
   send("offUpdateStarted");
   assert.equal(state.updateBusy, true);
   send("offUpdateCheckResult", { ...release, automatic: false, version: "", error: "offline" });
+  runTimers();
   assert.equal(state.updateBusy, false);
   assert.equal(state.updateError, true);
   assert.match(state.updateStatus, /offline/);
   send("offUpdateStarted");
   send("offUpdateCheckResult", { ...release, automatic: false });
+  runTimers();
   assert.equal(state.updateAvailable, true);
   assert.equal(state.updateBusy, false);
   assert.equal(state.updateError, false);
@@ -114,6 +127,9 @@ test("late automatic results cannot replace a manual check or staged update", ()
   assert.equal(manual.state.updateBusy, true);
   manual.send("offUpdateCheckResult", { ...release, automatic: false, version: "" });
   manual.send("offUpdateCheckResult", release);
+  assert.equal(manual.state.updateStatus, "Checking for updates…");
+  assert.ok(manual.timerDelays[0] > 0 && manual.timerDelays[0] <= 1000);
+  manual.runTimers();
   assert.equal(manual.state.updateStatus, "SSHBrowse is up to date.");
   assert.equal(manual.state.updatePrompt, null);
   const ready = app();
