@@ -15,9 +15,14 @@ export interface Session {
   status: SessionStatus;
   // This backend session key belongs to TerminalPane and changes on reconnect.
   processInstanceId: number | null;
+  // An unavailable restored pane never mounts a terminal or starts a process.
+  unavailable?: { connectionId: string };
 }
 
 function sessionTitle(session: Session): string {
+  if (session.unavailable) {
+    return session.unavailable.connectionId ? "Missing connection" : "Unsaved connection";
+  }
   if (session.connection === null) {
     return "Local terminal";
   }

@@ -24,6 +24,7 @@ SSHBrowse does not implement the SSH protocol itself, proxy SSH traffic through 
 - Open SSH, SFTP, and local terminal sessions
 - Search terminal output and configure scrollback history
 - Work with tabs or tiled terminals
+- Save and reopen named workspace layouts
 - Send commands or live input to multiple sessions
 
 ## Platforms

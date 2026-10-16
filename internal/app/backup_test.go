@@ -201,7 +201,11 @@ func TestBackupPreviewCancellationAndExpiry(t *testing.T) {
 
 func TestBackupExportProtectsActiveFiles(t *testing.T) {
 	b := newTestBackup(t)
-	for _, path := range []string{b.storePath, b.storePath + ".lock", b.recoveryPath(), filepath.Join(filepath.Dir(b.storePath), "window.json")} {
+	for _, path := range []string{
+		b.storePath, b.storePath + ".lock", b.recoveryPath(),
+		filepath.Join(filepath.Dir(b.storePath), "window.json"),
+		filepath.Join(filepath.Dir(b.storePath), "workspaces.json"),
+	} {
 		if err := b.exportFile(path, testBackupPreferences()); err == nil {
 			t.Fatal("export could overwrite active app data")
 		}
@@ -212,6 +216,22 @@ func TestBackupExportProtectsActiveFiles(t *testing.T) {
 	}
 	if info, err := os.Stat(output); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatal("export permissions are not private")
+	}
+}
+
+func TestBackupExportPreservesWorkspaceFile(t *testing.T) {
+	b := newTestBackup(t)
+	path := filepath.Join(filepath.Dir(b.storePath), "workspaces.json")
+	original := []byte("placeholder data that must survive export")
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.exportFile(path, testBackupPreferences()); err == nil {
+		t.Fatal("export accepted an active workspace file")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(got, original) {
+		t.Fatalf("export changed the saved workspaces: %q, %v", got, err)
 	}
 }
 
@@ -236,7 +256,10 @@ func TestBackupPreferenceValidation(t *testing.T) {
 
 func TestBackupExportProtectsCaseAliasesBeforeFilesExist(t *testing.T) {
 	b := newTestBackup(t)
-	for _, protected := range []string{b.storePath, b.recoveryPath(), filepath.Join(filepath.Dir(b.storePath), "window.json")} {
+	for _, protected := range []string{
+		b.storePath, b.recoveryPath(), filepath.Join(filepath.Dir(b.storePath), "window.json"),
+		filepath.Join(filepath.Dir(b.storePath), "workspaces.json"),
+	} {
 		alias := filepath.Join(filepath.Dir(protected), strings.ToUpper(filepath.Base(protected)))
 		if err := b.exportFile(alias, testBackupPreferences()); err == nil {
 			t.Fatalf("export accepted a case-only alias of %s", filepath.Base(protected))

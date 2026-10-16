@@ -30,6 +30,7 @@
     onnewlocal,
     onnewsftp,
     onnewconnection,
+    onworkspaces,
     onimport,
     onclosetab,
     onfont,
@@ -63,6 +64,7 @@
     onnewlocal: () => void;
     onnewsftp: () => void;
     onnewconnection: () => void;
+    onworkspaces: () => void;
     onimport: () => void;
     onclosetab: () => void;
     onfont: (command: TerminalFontCommand) => void;
@@ -117,6 +119,8 @@
           { label: "New SFTP Tab", shortcut: newSFTPShortcut, run: onnewsftp },
           { label: "New Connection…", shortcut: newConnectionShortcut, run: onnewconnection },
           { label: "Import from SSH Config…", run: onimport },
+          { separator: true },
+          { label: "Workspaces…", run: onworkspaces },
           { separator: true },
           { label: "Close Tab", shortcut: closeTabShortcut, run: onclosetab },
         ];

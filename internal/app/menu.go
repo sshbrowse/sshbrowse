@@ -11,6 +11,7 @@ const (
 	EventMenuNewLocalTerminal    = "menu:newLocalTerminal"
 	EventMenuNewConnection       = "menu:newConnection"
 	EventMenuImportSSHConfig     = "menu:importSSHConfig"
+	EventMenuWorkspaces          = "menu:workspaces"
 	EventMenuCloseTab            = "menu:closeTab"
 	EventMenuFontIncrease        = "menu:fontIncrease"
 	EventMenuFontDecrease        = "menu:fontDecrease"
@@ -103,6 +104,10 @@ func buildNativeMenu(wailsApp *application.App, checkForUpdates func()) *applica
 	})
 	shell.Add("Import from SSH Config…").OnClick(func(*application.Context) {
 		wailsApp.Event.Emit(EventMenuImportSSHConfig)
+	})
+	shell.AddSeparator()
+	shell.Add("Workspaces…").OnClick(func(*application.Context) {
+		wailsApp.Event.Emit(EventMenuWorkspaces)
 	})
 	shell.AddSeparator()
 	shell.Add("Close Tab").SetAccelerator("CmdOrCtrl+w").OnClick(func(*application.Context) {
