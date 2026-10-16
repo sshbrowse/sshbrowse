@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Bookmark from "@lucide/svelte/icons/bookmark";
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
   import Ellipsis from "@lucide/svelte/icons/ellipsis";
@@ -59,6 +60,8 @@
     oncopy,
     onpaste,
     onnew,
+    onworkspaces,
+    workspacesReady,
     onfoldercreate,
     onfolderrename,
     onfolderdelete,
@@ -85,6 +88,8 @@
     oncopy: (connection: Connection) => void;
     onpaste: (folder: string) => void;
     onnew: (folder: string) => void;
+    onworkspaces: () => void;
+    workspacesReady: boolean;
     onfoldercreate: (parent: string) => void;
     onfolderrename: (path: string) => void;
     onfolderdelete: (path: string) => void;
@@ -144,7 +149,10 @@
   let resizeStartWidth = 224;
   let resizeCurrentWidth = 224;
   let viewportWidth = $state(typeof window === "undefined" ? 1024 : window.innerWidth);
-  const minimumWidth = 180;
+  // Leave room for all three buttons beside macOS's fixed-size traffic lights.
+  let minimumWidth = $derived(shortcutPlatform === "mac"
+    ? Math.max(180, Math.ceil(80 / interfaceScale) + 3 * 30 + 2 * 2 + 10)
+    : 180);
   const maximumWidth = 360;
 
   function maximumSidebarWidth(): number {
@@ -811,6 +819,9 @@
 <aside bind:this={sidebar} id="saved-connections" class="sidebar" tabindex="-1" aria-label="Saved connections" aria-hidden={!visible || inactive} inert={!visible || inactive} onpointerdown={focusSidebarBackground}>
   <div class="header">
     <span class="header-actions">
+      <button type="button" class="icon" aria-label="Workspaces" title="Save or open workspaces" disabled={!workspacesReady} onclick={onworkspaces}>
+        <Bookmark size={18} />
+      </button>
       <button class="icon folder-add" aria-label="New folder" title="New folder" onclick={() => onfoldercreate(pasteFolder)}>
         <FolderPlus size={18} />
       </button>

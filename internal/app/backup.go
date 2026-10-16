@@ -99,7 +99,12 @@ func (b *Backup) Export(preferences map[string]string) (string, error) {
 }
 
 func (b *Backup) exportFile(path string, preferences map[string]string) error {
-	for _, protected := range []string{b.storePath, b.storePath + ".lock", filepath.Join(filepath.Dir(b.storePath), "window.json"), b.recoveryPath()} {
+	directory := filepath.Dir(b.storePath)
+	for _, protected := range []string{
+		b.storePath, b.storePath + ".lock", b.recoveryPath(),
+		filepath.Join(directory, "window.json"),
+		filepath.Join(directory, "workspaces.json"),
+	} {
 		if sameFilePath(path, protected) {
 			return errors.New("choose a backup file outside SSHBrowse's active data files")
 		}

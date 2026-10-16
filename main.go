@@ -13,6 +13,7 @@ import (
 	"sshbrowse/internal/app"
 	"sshbrowse/internal/buildinfo"
 	"sshbrowse/internal/profile"
+	"sshbrowse/internal/workspaces"
 )
 
 // The production frontend build is embedded into the binary.
@@ -96,10 +97,12 @@ func main() {
 		ShouldQuit: func() bool { return quitGuard.ShouldQuit() },
 	})
 	sessions := app.NewSessions(wailsApp, store)
+	workspacesService := app.NewWorkspaces(workspaces.NewStore(storePath))
 	quitGuard = app.NewQuitGuard(wailsApp, sessions)
 	wailsApp.RegisterService(application.NewService(sessions))
 	wailsApp.RegisterService(application.NewService(app.NewConnections(store, wailsApp)))
 	wailsApp.RegisterService(application.NewService(app.NewBackup(store, storePath, wailsApp)))
+	wailsApp.RegisterService(application.NewService(workspacesService))
 	_, updateCoordinator, updateErr := app.ConfigureUpdater(wailsApp, executablePath, quitGuard)
 	if updateErr != nil {
 		log.Printf("Configure updater: %v", updateErr)

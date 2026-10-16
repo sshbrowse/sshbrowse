@@ -9,6 +9,7 @@
   import X from "@lucide/svelte/icons/x";
   import { Browser, Clipboard, Events, Window as WailsWindow } from "@wailsio/runtime";
   import * as Sessions from "../bindings/sshbrowse/internal/app/sessions";
+  import * as Workspaces from "../bindings/sshbrowse/internal/app/workspaces";
   import type { Connection } from "../bindings/sshbrowse/internal/profile/models";
   import Sidebar from "./lib/Sidebar.svelte";
   import TabBar from "./lib/TabBar.svelte";
@@ -22,6 +23,8 @@
   import CloseConfirmDialog from "./lib/CloseConfirmDialog.svelte";
   import SettingsPage from "./lib/SettingsPage.svelte";
   import UpdateNotice from "./lib/UpdateNotice.svelte";
+  import WorkspaceDialog from "./lib/WorkspaceDialog.svelte";
+  import { appendWorkspace, captureWorkspace, workspaceAvailability, type SavedLayout, type SavedWorkspace } from "./lib/savedWorkspaces";
   import { canCheckForUpdates, claimStartupUpdateCheck, githubReleaseURL, type UpdateCheckResult, type UpdateRelease } from "./lib/updates";
   import { applyCustomTheme, customThemeProperties, defaultCustomPalette, type CustomPalette } from "./lib/customPalette";
   import type { TerminalColors, TerminalFontName, ThemeName } from "./lib/appearance";
@@ -136,6 +139,12 @@
   let activeId = $state<number | null>(null);
   let nextTabId = 1;
   let nextSessionId = 1;
+  let savedWorkspaces = $state<SavedWorkspace[]>([]);
+  let workspacesReady = $state(false);
+  let workspaceDialogOpen = $state(false);
+  let workspaceDialog = $state<{ dismiss: () => void }>();
+  let workspaceError = $state("");
+  const currentLayout = $derived(captureWorkspace({ tabs, sessions, activeId }));
   let activeTab = $derived(tabs.find((tab) => tab.id === activeId) ?? null);
   let activeWorkspace = $derived(activeTab?.kind === "workspace" ? activeTab : null);
   let activeTileGrid = $derived(activeWorkspace ? tileGrid(activeWorkspace.sessionIds.length) : null);
@@ -274,13 +283,65 @@
         returnFocus.focus();
         delete returnFocus.dataset.settingsReturnFocus;
       } else if (activeId !== null) {
-        terminalFocusRequest++;
+        const selectedSessionId = focusedSessionId(tabs, activeId);
+        const selectedSession = sessions.find((session) => session.id === selectedSessionId);
+        if (!selectedSession || selectedSession.unavailable || terminalPaneComponent === null) {
+          document.querySelector<HTMLElement>(`[data-tab-id="${activeId}"]`)?.focus();
+        } else {
+          terminalFocusRequest++;
+        }
       }
     });
   }
 
   function modalDialogOpen(): boolean {
-    return editing !== null || moving !== null || folderAction !== null || picking || importing !== null || closeConfirmation !== null || settingsOpen || broadcastConfirming || terminalPasteConfirmingSessionId !== null;
+    return workspaceDialogOpen || editing !== null || moving !== null || folderAction !== null || picking || importing !== null || closeConfirmation !== null || settingsOpen || broadcastConfirming || terminalPasteConfirmingSessionId !== null;
+  }
+
+  async function loadWorkspaces() {
+    const loaded = await Workspaces.Load();
+    // The store validates kinds, positions, and arrays before returning layouts.
+    savedWorkspaces = (loaded.workspaces ?? []) as SavedWorkspace[];
+    workspaceError = loaded.warning;
+    workspacesReady = true;
+  }
+
+  function openWorkspaces() {
+    if (modalDialogOpen() || scanningImport || broadcastSending || !workspacesReady) return;
+    closeBroadcastBar(false);
+    rememberDialogFocus();
+    workspaceDialogOpen = true;
+  }
+
+  async function saveWorkspace(name: string) {
+    await Workspaces.Save(name, currentLayout);
+    await loadWorkspaces();
+  }
+
+  async function renameWorkspace(id: string, name: string) {
+    await Workspaces.Rename(id, name);
+    await loadWorkspaces();
+  }
+
+  async function deleteWorkspace(id: string) {
+    await Workspaces.Delete(id);
+    await loadWorkspaces();
+  }
+
+  async function openSavedWorkspace(layout: SavedLayout) {
+    // Refresh immediately before starting sessions, so edits and deletions apply.
+    const confirmedAvailability = workspaceAvailability(layout, connections.list);
+    if (layout.tabs.some((tab) => tab.panes.some((pane) => pane.kind === "ssh" || pane.kind === "sftp"))) {
+      await loadConnections();
+    }
+    if (confirmedAvailability !== workspaceAvailability(layout, connections.list)) {
+      throw new Error("Available connections changed. Review the updated session counts and confirm again.");
+    }
+    const next = appendWorkspace(workspaceState(), layout, $state.snapshot(connections.list), nextTabId, nextSessionId);
+    applyWorkspaceState(next);
+    nextTabId = next.nextTabId;
+    nextSessionId = next.nextSessionId;
+    terminalFocusRequest++;
   }
 
   function stopLiveBroadcast(reason?: string) {
@@ -631,6 +692,10 @@
     if (session === null) {
       return;
     }
+    if (session.unavailable) {
+      operationError = "This pane has no available saved connection for SFTP.";
+      return;
+    }
     if (session.connection === null) {
       operationError = "SFTP needs an SSH connection; the focused session is a local shell.";
       return;
@@ -701,7 +766,9 @@
   }
 
   function handleMenuCloseTab() {
-    if (settingsOpen) {
+    if (workspaceDialogOpen) {
+      workspaceDialog?.dismiss();
+    } else if (settingsOpen) {
       closeSettings();
     } else if (closeConfirmation) {
       closeConfirmationDialog?.dismiss();
@@ -1357,9 +1424,15 @@
   onMount(() => {
     reloadPreferences();
 
-    loadConnections()
+    void loadConnections()
+      .catch((error) => {
+        operationError = `Could not read saved connections: ${errorMessage(error)}`;
+      })
+      .then(loadWorkspaces)
       .then(() => openSSHConfigImport(true))
-      .catch(console.error);
+      .catch((error) => {
+        workspaceError = `Could not read workspaces: ${errorMessage(error)}`;
+      });
 
     // While a dialog is up, Close Tab dismisses it and other shortcuts wait.
     const offNewTab = Events.On("menu:newTab", () => {
@@ -1373,6 +1446,7 @@
     const offImportSSHConfig = Events.On("menu:importSSHConfig", () => {
       openSSHConfigImport();
     });
+    const offWorkspaces = Events.On("menu:workspaces", () => openWorkspaces());
     const offCloseTab = Events.On("menu:closeTab", handleMenuCloseTab);
     const offFontIncrease = Events.On("menu:fontIncrease", () => onTerminalFontCommand("increase"));
     const offFontDecrease = Events.On("menu:fontDecrease", () => onTerminalFontCommand("decrease"));
@@ -1489,6 +1563,7 @@
       offNewSFTP();
       offNewConnection();
       offImportSSHConfig();
+      offWorkspaces();
       offCloseTab();
       offFontIncrease();
       offFontDecrease();
@@ -1541,6 +1616,7 @@
       onnewlocal={newLocalTerminal}
       onnewsftp={openSFTPForFocusedSession}
       onnewconnection={newConnection}
+      onworkspaces={() => openWorkspaces()}
       onimport={() => openSSHConfigImport()}
       onclosetab={handleMenuCloseTab}
       onfont={onTerminalFontCommand}
@@ -1575,6 +1651,8 @@
     oncopy={copyConnection}
     onpaste={pasteConnection}
     onnew={newConnection}
+    onworkspaces={() => openWorkspaces()}
+    {workspacesReady}
     onfoldercreate={(parent) => requestFolderAction({ kind: "create", parent })}
     onfolderrename={(path) => requestFolderAction({ kind: "rename", path })}
     onfolderdelete={removeFolder}
@@ -1696,6 +1774,12 @@
       </button>
       </div>
     {/if}
+    {#if workspaceError}
+      <div class="operation-error" role="alert">
+        <span>{workspaceError}</span>
+        <button aria-label="Dismiss workspace error" onclick={() => (workspaceError = "")}><X size={16} /></button>
+      </div>
+    {/if}
     {#if operationError}
       <div class="operation-error" role="alert">
         <span>{operationError}</span>
@@ -1792,7 +1876,13 @@
               >
             </div>
           {/if}
-          {#if terminalPaneComponent}
+          {#if session.unavailable}
+            <div class="terminal-placeholder" role="status">
+              <span>{session.unavailable.connectionId
+                ? "This saved connection is missing. Restore the saved connection, then open the workspace again, or close this pane."
+                : "This connection was not saved. Save connections before saving a workspace, or close this pane."}</span>
+            </div>
+          {:else if terminalPaneComponent}
             {@const TerminalPane = terminalPaneComponent}
             <TerminalPane
               sessionId={session.id}
@@ -1916,9 +2006,22 @@
     connections={connections.list}
     mode={editing.mode}
     folders={folderNames()}
-    onsave={save}
+    onsave={(connection, connectAfterSave) => save(connection, connectAfterSave)}
     ondelete={deleteConnection}
     onclose={() => { editing = null; closeDialog(); }}
+  />
+{/if}
+{#if workspaceDialogOpen}
+  <WorkspaceDialog
+    bind:this={workspaceDialog}
+    workspaces={savedWorkspaces}
+    current={currentLayout}
+    connections={connections.list}
+    onsave={saveWorkspace}
+    onrename={renameWorkspace}
+    ondelete={deleteWorkspace}
+    onopen={openSavedWorkspace}
+    onclose={() => { workspaceDialogOpen = false; closeDialog(); }}
   />
 {/if}
 {#if moving}
