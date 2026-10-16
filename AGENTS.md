@@ -18,6 +18,6 @@ Read [README.md](README.md) for product scope and [CONTRIBUTING.md](CONTRIBUTING
 ## Validation and Git
 
 - Match checks to the change. Use `wails3 task verify` on the native host (`ARCH=arm64` for macOS ARM64). For build, packaging, or GUI changes, package and smoke-run the native app. Linux acceptance targets Fedora 44 x86-64 GNOME/Wayland and a runnable `bin/sshbrowse`.
-- For headless Linux GUI work, use the preview and screenshot procedure in [CONTRIBUTING.md](CONTRIBUTING.md); inspect the screenshot. Give concurrent workers separate worktrees and preview runs, with private tokens and distinct ports.
+- For headless Linux UI reviews, run `bash build/browser-preview.sh [port]` and open the printed URL in a private browser session. Use the Weston procedure in [CONTRIBUTING.md](CONTRIBUTING.md) for native WebKit and desktop checks; inspect the screenshot. Give concurrent workers separate worktrees and preview runs, with private tokens and distinct ports.
 - Inspect the final diff and report validation gaps. Before committing, obtain an independent adversarial review of the staged diff; use a separate review agent when working with coding agents.
 - Use short imperative commit subjects. Keep documentation concise and free of relative dates. Do not push, publish, merge, or create remote resources unless asked.
