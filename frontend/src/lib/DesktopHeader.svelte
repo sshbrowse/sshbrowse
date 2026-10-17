@@ -478,7 +478,7 @@
   .menu-root {
     position: relative;
     display: flex;
-    align-items: stretch;
+    align-items: center;
     height: 100%;
   }
   .menu-trigger {
@@ -489,7 +489,10 @@
     background: transparent;
     color: var(--toolbar-foreground);
     cursor: default;
-    font: var(--ui-font-body) var(--font-ui);
+    font: var(--ui-font-tab) var(--font-ui);
+  }
+  .menu-trigger[data-menu-trigger="app"] {
+    font-size: var(--ui-font-small);
   }
   .menu-trigger:hover,
   .menu-trigger:focus-visible,

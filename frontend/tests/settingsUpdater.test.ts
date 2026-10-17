@@ -14,7 +14,7 @@ test("Settings shows check, download, retry, and restart controls for each updat
   // this component without a loader for Lucide's .svelte files.
   const code = compiled
     .replace(/^import BackupPanel from .*;$/gm, "const BackupPanel = () => {};")
-    .replace(/^import (ArrowLeft|Check|X) from .*;$/gm, "const $1 = () => {};")
+    .replace(/^import (\w+) from ["']@lucide\/svelte\/icons\/[^"']+["'];$/gm, "const $1 = () => {};")
     .replace('from "./customPalette"', `from ${JSON.stringify(new URL("../src/lib/customPalette.ts", import.meta.url).href)}`)
     .replace('from "./updates"', `from ${JSON.stringify(new URL("../src/lib/updates.ts", import.meta.url).href)}`)
     .replace('from "./storage"', `from ${JSON.stringify(new URL("../src/lib/storage.ts", import.meta.url).href)}`);
@@ -72,6 +72,20 @@ test("Settings shows check, download, retry, and restart controls for each updat
     assert.match(ready, /Restart to update/);
     assert.match(ready, /Update ready\. Restart to use the new version\./);
     assert.doesNotMatch(ready, /Download update/);
+
+    for (const [label, overrides] of [
+      ["Check for updates", {}],
+      ["Download update", { updateAvailable: true }],
+      ["Restart to update", { updateReady: true }],
+      ["View release", { updateAvailable: true, updateInfo: { ...props.updateInfo, availability: "package-manager" } }],
+    ] as const) {
+      const busy = render(SettingsPage, { props: { ...props, ...overrides, backupBusy: true, updateReleaseURL: "https://github.com/sshbrowse/sshbrowse/releases/tag/v2.0.0" } }).body;
+      const action = busy.match(new RegExp(`<button[^>]*>${label}</button>`));
+      assert.ok(action, `missing ${label} button`);
+      assert.match(action[0], /\sdisabled(?:\s|=|>)/, `${label} must be disabled during a backup`);
+      assert.match(busy, /<button[^>]*disabled[^>]*aria-label="Check for updates on startup"/);
+      assert.match(busy, /<button[^>]*disabled[^>]*>Release notes ↗<\/button>/);
+    }
 
     const failed = render(SettingsPage, { props: { ...props, updateError: true, updateStatus: "Update failed: network unavailable" } }).body;
     assert.match(failed, /role="alert"[^>]*>Update failed: network unavailable/);

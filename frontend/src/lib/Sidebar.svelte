@@ -831,6 +831,14 @@
     </span>
   </div>
 
+  {#if connections.length === 0 && folders.length === 0}
+    <div class="empty-connections">
+      <strong>No saved connections</strong>
+      <p>Save a host to keep it close at hand.</p>
+      <button type="button" onclick={() => onnew("")}>New connection</button>
+    </div>
+  {/if}
+
   <!-- The list background is the top-level drop and paste target, so no row is drawn for it. -->
   <!-- Row elements override this inherited menu. Context events must keep
        bubbling to Wails' window listener so row menus remain native. -->
@@ -1003,6 +1011,25 @@
     overflow-y: auto;
     padding: 8px 8px 12px;
   }
+  .empty-connections {
+    padding: 24px 20px 12px;
+    color: var(--sidebar-muted-foreground);
+    font-size: var(--ui-font-small);
+    line-height: 1.5;
+  }
+  .empty-connections strong { color: var(--sidebar-foreground); font-weight: 500; }
+  .empty-connections p { margin: 6px 0 12px; }
+  .empty-connections button {
+    min-height: 30px;
+    padding: 4px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--sidebar-foreground);
+    font: inherit;
+    cursor: default;
+  }
+  .empty-connections button:hover { background: var(--sidebar-control-surface); }
   .sidebar-footer { flex: none; padding: 8px; border-top: 1px solid var(--sidebar-border); }
   .settings-button {
     display: flex;
@@ -1165,10 +1192,10 @@
     padding: 0;
     border: 0;
     background: none;
-    color: inherit;
+    color: var(--icon-muted);
     width: 30px;
     height: 30px;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     font-size: 15px;
     line-height: 1;
     cursor: default;

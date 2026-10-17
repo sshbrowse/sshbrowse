@@ -3,6 +3,9 @@
   import BackupPanel from "./BackupPanel.svelte";
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import Check from "@lucide/svelte/icons/check";
+  import Palette from "@lucide/svelte/icons/palette";
+  import SlidersHorizontal from "@lucide/svelte/icons/sliders-horizontal";
+  import Terminal from "@lucide/svelte/icons/terminal";
   import X from "@lucide/svelte/icons/x";
   import { customThemeStyle, defaultCustomPalette, isHexColor, type CustomPalette } from "./customPalette";
   import type { TerminalColors, TerminalFontName, ThemeName } from "./appearance";
@@ -133,15 +136,13 @@
     if (isHexColor(value)) oncustompalettechange({ ...customPalette, [key]: value.toLowerCase() });
   }
 
-  type Section = "general" | "appearance" | "terminal" | "logging" | "data";
+  type Section = "general" | "appearance" | "terminal";
   const sectionLabels: Record<Section, string> = {
     general: "General",
     appearance: "Appearance",
     terminal: "Terminal",
-    logging: "Logging",
-    data: "Backup & restore",
   };
-  const sections: Section[] = ["general", "appearance", "terminal", "logging", "data"];
+  const sections: Section[] = ["general", "appearance", "terminal"];
   let selectedSection = $state<Section>("general");
   let pageHeading: HTMLHeadingElement;
   let pageContent: HTMLElement;
@@ -191,7 +192,16 @@
             class:active={selectedSection === section}
             aria-current={selectedSection === section ? "page" : undefined}
             onclick={() => selectSection(section)}
-          >{sectionLabels[section]}</button>
+          >
+            {#if section === "general"}
+              <SlidersHorizontal class="nav-icon" size={15} aria-hidden="true" />
+            {:else if section === "appearance"}
+              <Palette class="nav-icon" size={15} aria-hidden="true" />
+            {:else}
+              <Terminal class="nav-icon" size={15} aria-hidden="true" />
+            {/if}
+            <span>{sectionLabels[section]}</span>
+          </button>
         {/each}
       </div>
       <button class="back" type="button" disabled={backupBusy} onclick={onclose}><ArrowLeft size={16} /> Back to workspace</button>
@@ -199,10 +209,14 @@
     <div class="settings-main">
       <button class="close" type="button" disabled={backupBusy} aria-label="Close Settings" title="Close Settings" onclick={onclose}><X size={16} /></button>
       <main bind:this={pageContent} class="page-content">
-        <div class="page-inner" class:backup-page={selectedSection === "data"}>
+        <div class="page-inner">
           <h1 bind:this={pageHeading} tabindex="-1">{sectionLabels[selectedSection]}</h1>
-          {#if selectedSection === "data"}
-            <BackupPanel {sessionsOpen} oncomplete={onbackupcomplete} onbusychange={onbackupbusychange} />
+          {#if selectedSection === "general"}
+            <p class="page-description">Updates and backups for SSHBrowse.</p>
+          {:else if selectedSection === "appearance"}
+            <p class="page-description">Make the workspace your own.</p>
+          {:else}
+            <p class="page-description">Control input, history, and session recording.</p>
           {/if}
           {#if selectedSection === "general"}
             <section aria-labelledby="updates-heading">
@@ -215,22 +229,22 @@
                   <div><strong>Current version</strong><span>{updateInfo?.version ?? "Loading…"}</span></div>
                   {#if canCheckForUpdates(updateInfo?.availability)}
                     {#if updateReady}
-                      <button class="update-button" type="button" disabled={updateBusy} onclick={onrestartupdate}>Restart to update</button>
+                      <button class="update-button" type="button" disabled={backupBusy || updateBusy} onclick={onrestartupdate}>Restart to update</button>
                     {:else if updateAvailable}
                       {#if updateInfo?.availability === "supported"}
-                        <button class="update-button" type="button" disabled={updateBusy} onclick={ondownloadupdate}>Download update</button>
+                        <button class="update-button" type="button" disabled={backupBusy || updateBusy} onclick={ondownloadupdate}>Download update</button>
                       {:else}
-                        <button class="update-button" type="button" onclick={onreleasenotes}>View release</button>
+                        <button class="update-button" type="button" disabled={backupBusy} onclick={onreleasenotes}>View release</button>
                       {/if}
                     {:else}
-                      <button class="update-button" type="button" disabled={updateBusy} onclick={oncheckforupdates}>Check for updates</button>
+                      <button class="update-button" type="button" disabled={backupBusy || updateBusy} onclick={oncheckforupdates}>Check for updates</button>
                     {/if}
                   {/if}
                 </div>
                 {#if canCheckForUpdates(updateInfo?.availability)}
                   <div class="setting-row">
                     <div><strong>Check for updates on startup</strong><span>Check GitHub Releases at most once a day; downloads require your approval</span></div>
-                    <button class="switch" type="button" role="switch" aria-label="Check for updates on startup" aria-checked={checkUpdatesOnStartup} onclick={() => onstartupupdatechange(!checkUpdatesOnStartup)}><span></span></button>
+                    <button class="switch" type="button" role="switch" disabled={backupBusy} aria-label="Check for updates on startup" aria-checked={checkUpdatesOnStartup} onclick={() => onstartupupdatechange(!checkUpdatesOnStartup)}><span></span></button>
                   </div>
                 {/if}
                 {#if updateInfo}
@@ -240,9 +254,15 @@
                   <p class="update-status" class:error={updateError} role={updateError ? "alert" : "status"}>{updateStatus}</p>
                 {/if}
                 {#if updateReleaseURL}
-                  <p class="update-guidance"><button class="update-button" type="button" onclick={onreleasenotes}>Release notes ↗</button></p>
+                  <p class="update-guidance"><button class="update-button" type="button" disabled={backupBusy} onclick={onreleasenotes}>Release notes ↗</button></p>
                 {/if}
               </div>
+            </section>
+            <section aria-labelledby="backup-heading">
+              <div class="section-heading">
+                <h2 id="backup-heading">Backup &amp; restore</h2>
+              </div>
+              <BackupPanel {sessionsOpen} oncomplete={onbackupcomplete} onbusychange={onbackupbusychange} />
             </section>
           {/if}
           {#if selectedSection === "appearance"}
@@ -399,7 +419,7 @@
               <p id="scrollback-warning" class="hint">Lowering this limit removes the oldest retained lines in every open terminal. Removed output cannot be recovered.</p>
             </section>
           {/if}
-          {#if selectedSection === "logging"}
+          {#if selectedSection === "terminal"}
             <section aria-labelledby="logging-heading">
               <div class="section-heading">
                 <h2 id="logging-heading">Session logging</h2>
@@ -454,25 +474,30 @@
     height: 100%;
     zoom: var(--interface-scale);
   }
-  .settings-nav { display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--sidebar-border); background: var(--sidebar); }
-  .nav-heading { display: flex; flex-direction: column; gap: 3px; padding: 18px 20px; border-bottom: 1px solid var(--sidebar-border); }
+  .settings-nav { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--sidebar-border); background: var(--sidebar); }
+  .nav-heading { display: flex; flex: none; flex-direction: column; gap: 3px; padding: 18px 20px; }
   :global(.app.mac-window-chrome) .nav-heading { padding: 48px 20px 18px; }
   .nav-heading span { color: var(--sidebar-muted-foreground); font-size: var(--ui-font-tiny); }
   .nav-heading strong { color: var(--text-primary); font-size: var(--ui-font-heading); font-weight: 500; }
-  .nav-links { display: flex; flex-direction: column; gap: 4px; padding: 18px 10px; }
+  .nav-links { display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; padding: 10px; }
   .nav-links button, .back {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 10px;
     min-height: 36px;
     padding: 8px 12px;
     border: 0;
     border-radius: var(--radius-control);
     background: transparent;
-    color: var(--sidebar-foreground);
+    color: var(--sidebar-muted-foreground);
     font: inherit;
     text-align: left;
     cursor: default;
   }
+  .nav-links :global(.nav-icon) { flex: none; color: var(--icon-muted); }
   .nav-links button:hover, .back:hover { background: var(--sidebar-row-hover); color: var(--sidebar-foreground); }
-  .nav-links button.active { background: var(--sidebar-row-active); color: var(--sidebar-foreground); font-weight: 500; }
+  .nav-links button.active { background: var(--sidebar-row-active); color: var(--text-primary); font-weight: 500; }
   .back { display: flex; align-items: center; gap: 10px; margin: auto 10px 10px; width: calc(100% - 20px); }
   .settings-main { position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden; background: var(--canvas); }
   .close {
@@ -493,10 +518,9 @@
   .close:hover { background: var(--control-hover); color: var(--text-primary); }
   .page-content { flex: 1; min-height: 0; overflow-y: auto; padding: 52px clamp(24px, 4vw, 64px) 80px; }
   .page-inner { max-width: 760px; margin: 0 auto; }
-  .page-inner.backup-page { max-width: 760px; }
-  .backup-page h1 { margin-bottom: 12px; }
-  h1 { margin: 0 0 28px; font-size: var(--ui-font-title); font-weight: 500; line-height: 1.25; letter-spacing: -0.02em; }
+  h1 { margin: 0; font-size: var(--ui-font-title); font-weight: 500; line-height: 1.25; letter-spacing: -0.02em; }
   h1:focus { outline: none; }
+  .page-description { margin: 8px 0 28px; color: var(--text-secondary); font-size: var(--ui-font-small); }
   .page-inner section + section { margin-top: 32px; }
   .section-heading { margin-bottom: 16px; }
   h2 { margin: 0 0 5px; font-size: var(--ui-font-heading); font-weight: 500; }
@@ -548,8 +572,8 @@
   .card-label { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 9px; font-weight: 500; }
   .card-description { display: block; margin-top: 2px; color: var(--text-secondary); font-size: var(--ui-font-small); }
   .selected-mark { color: var(--accent); }
-  .setting-group { border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); }
-  .setting-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; padding: 12px 0; }
+  .setting-group { overflow: hidden; border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface); }
+  .setting-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; padding: 14px 18px; }
   .setting-row + .setting-row { border-top: 1px solid var(--border-subtle); }
   .setting-row > div:first-child { flex: 1 1 240px; min-width: 0; }
   .setting-row strong, .setting-row span { display: block; }
@@ -562,7 +586,8 @@
   .update-status { color: var(--text-primary); }
   .update-status.error { color: var(--status-error); }
   .segmented, .stepper { display: flex; flex: none; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--input-surface); }
-  .scrollback-control { display: flex; align-items: center; gap: 8px; }
+  .scrollback-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
+  .segmented { flex-wrap: wrap; max-width: 100%; }
   .scrollback-control input { width: 110px; min-height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--input-surface); color: var(--text-primary); font: inherit; }
   .segmented button, .stepper button { min-height: 34px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text-secondary); font: inherit; cursor: default; }
   .segmented button:hover, .stepper button:hover:not(:disabled) { background: var(--control-hover); color: var(--text-primary); }
@@ -618,6 +643,7 @@
   @media (max-width: 920px) {
     .setting-row { align-items: flex-start; flex-direction: column; gap: 9px; }
     .setting-row > div:first-child { flex: none; width: 100%; }
+    .directory-picker { flex: none; width: 100%; }
   }
   @media (max-width: 700px) {
     .nav-heading { padding: 16px 12px; }

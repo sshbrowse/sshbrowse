@@ -50,7 +50,7 @@ After launching SSHBrowse, you can:
 
 - Create a saved connection
 - Import aliases with **Shell > Import from SSH Config…**
-- Move saved connections and preferences with **Settings > Backup & restore**
+- Move saved connections and preferences with **Settings > General > Backup & restore**
 - Enter `user@host:port` directly in the new-tab picker
 
 See the [usage guide](docs/usage.md) for connections, sessions, terminal tools,

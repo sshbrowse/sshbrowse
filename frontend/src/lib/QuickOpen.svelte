@@ -26,6 +26,9 @@
   let query = $state("");
   let selected = $state(0);
   let error = $state("");
+  const componentId = $props.id();
+  const headingId = `${componentId}-heading`;
+  const listboxId = `${componentId}-listbox`;
   const shortcutPlatform = currentPlatform();
   const newTabShortcut = shortcutLabel("⌘T", "Ctrl+Shift+N", shortcutPlatform);
   const newLocalShortcut = shortcutLabel("⌘⇧T", "Ctrl+Shift+T", shortcutPlatform);
@@ -119,12 +122,16 @@
       }
     }
   }
+
+  function optionId(row: Row): string {
+    return `${componentId}-option-${row.kind === "connect" ? "connect" : `saved-${encodeURIComponent(row.connection.id)}`}`;
+  }
 </script>
 
-<dialog bind:this={dialog} onclose={onclose}>
+<dialog bind:this={dialog} onclose={onclose} aria-labelledby={headingId}>
   <div class="heading">
     <div>
-      <h2>Open session</h2>
+      <h2 id={headingId}>Open session</h2>
       <p>Choose a saved connection or type a destination.</p>
     </div>
     <kbd>{newTabShortcut}</kbd>
@@ -132,12 +139,26 @@
   <div class="search">
     <Search class="search-icon" size={16} />
     <!-- svelte-ignore a11y_autofocus -- a modal dialog is the one place autofocus is right -->
-    <input bind:value={query} {onkeydown} aria-label="Search connections or enter a host" placeholder="user@host:port" autofocus spellcheck="false" />
+    <input
+      bind:value={query}
+      {onkeydown}
+      role="combobox"
+      aria-label="Search connections or enter a host"
+      aria-autocomplete="list"
+      aria-haspopup="listbox"
+      aria-expanded="true"
+      aria-controls={listboxId}
+      aria-activedescendant={rows[selected] ? optionId(rows[selected]) : undefined}
+      placeholder="user@host:port"
+      autofocus
+      spellcheck="false"
+    />
   </div>
   <!-- Keyboard handling lives on the input above; the list only mirrors it. -->
-  <ul bind:this={listbox} role="listbox">
-    {#each rows as row, index (row.kind === "saved" ? row.connection.id : "connect")}
+  <ul bind:this={listbox} id={listboxId} role="listbox" aria-label="Connection results">
+    {#each rows as row, index (optionId(row))}
       <li
+        id={optionId(row)}
         role="option"
         aria-selected={index === selected}
         class:selected={index === selected}
@@ -154,7 +175,7 @@
             <span class="name">{row.connection.name}</span>
             <span class="detail">{row.connection.user ? `${row.connection.user}@` : ""}{row.connection.host}{row.connection.port > 0 ? `:${row.connection.port}` : ""}</span>
           </span>
-          {#if row.connection.folder}<span class="folder">{row.connection.folder}</span>{/if}
+          {#if row.connection.folder}<span class="folder" title={row.connection.folder}>{row.connection.folder}</span>{/if}
         {/if}
       </li>
     {/each}
@@ -262,6 +283,7 @@
     color: var(--text-primary);
   }
   .row-copy {
+    flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -280,10 +302,15 @@
     white-space: nowrap;
   }
   .folder {
-    flex: none;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: min(40%, 180px);
     margin-left: 12px;
     color: var(--text-muted);
     font-size: var(--ui-font-tiny);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .none {
     color: var(--text-muted);

@@ -32,7 +32,7 @@ output automatically** on a saved connection to record from startup.
 Recordings default to
 `~/SSHBrowse/logs/YYYY-MM-DD/hostname-YYYY-MM-DD_HH-MM-SS.txt`, using the local
 start time, with start and end timestamps inside the file. Choose another root
-folder in **Settings > Logging**.
+folder in **Settings > Terminal > Session logging**.
 
 Each recording uses one file and stops at 100 MiB while the terminal keeps
 running. Old logs are kept until you delete them. Logs can contain sensitive
@@ -42,8 +42,8 @@ accurate transcript.
 
 ## Backup and restore
 
-Use **Settings > Backup & restore** to move connections, folders, and jump-host
-links between computers. Export can also include app preferences.
+Use **Settings > General > Backup & restore** to move connections, folders, and
+jump-host links between computers. Export can also include app preferences.
 
 Import previews the changes. **Add to saved connections** keeps your library;
 **Replace saved connections** replaces it. Preferences stay unchanged unless

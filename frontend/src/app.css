@@ -1,7 +1,7 @@
 :root {
-  --radius-panel: 8px;
-  --radius-dialog: 10px;
-  --radius-control: 6px;
+  --radius-panel: 10px;
+  --radius-dialog: 14px;
+  --radius-control: 8px;
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --ui-font-body: 14px;
   --ui-font-tab: 13px;
