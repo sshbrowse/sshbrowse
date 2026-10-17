@@ -128,17 +128,20 @@ func (c *loggingController) Start(loadSettings func() (LoggingSettings, error), 
 	c.mu.Unlock()
 
 	if previous != nil {
-		if err := previous.Close("previous recording stopped"); errors.Is(err, sessionlog.ErrCloseTimeout) {
-			c.fail(generation, err)
-			state := c.State()
-			c.opMu.Unlock()
-			return state, err
-		}
+		closeErr := previous.Close("previous recording stopped")
 		c.mu.Lock()
-		if c.recorder == previous {
+		if !errors.Is(closeErr, sessionlog.ErrCloseTimeout) && c.recorder == previous {
 			c.recorder = nil
 		}
 		c.mu.Unlock()
+		// Report finalization failures before a new recording replaces the old
+		// path. Release completed recorders so a later explicit retry can proceed.
+		if closeErr != nil {
+			c.fail(generation, closeErr)
+			state := c.State()
+			c.opMu.Unlock()
+			return state, closeErr
+		}
 	}
 	if err := c.reserveSetupSlot(); err != nil {
 		c.fail(generation, err)
