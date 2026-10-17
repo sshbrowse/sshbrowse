@@ -261,6 +261,58 @@ func TestTimedOutRecorderIsRetainedAndMustCloseBeforeRestart(t *testing.T) {
 	}
 }
 
+func TestRestartReportsPreviousRecorderFinalizationErrorBeforeRetry(t *testing.T) {
+	directory := t.TempDir()
+	sessions := NewSessions(nil, profile.NewStore(filepath.Join(directory, "connections.json")))
+	finalizationErr := errors.New("write session transcript footer: disk I/O error")
+	first := &retryTestRecorder{
+		path:        filepath.Join(directory, "first.txt"),
+		closeErrors: []error{sessionlog.ErrCloseTimeout, finalizationErr},
+	}
+	second := &retryTestRecorder{path: filepath.Join(directory, "second.txt")}
+	created := 0
+	sessions.makeRecorder = func(sessionlog.Options) (sessionRecorder, error) {
+		created++
+		if created == 1 {
+			return first, nil
+		}
+		return second, nil
+	}
+	if err := startLoggingTestShell(sessions, 1, "local", false); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := sessions.Close(1); err != nil {
+			t.Errorf("close shell session: %v", err)
+		}
+	})
+	if _, err := sessions.StartLogging(1, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sessions.StopLogging(1); !errors.Is(err, sessionlog.ErrCloseTimeout) {
+		t.Fatalf("first stop: %v", err)
+	}
+
+	var published SessionLoggingState
+	sessions.loggingStateEmitter = func(state SessionLoggingState) { published = state }
+	state, err := sessions.StartLogging(1, 0)
+	if !errors.Is(err, finalizationErr) || state.Active || state.Error != finalizationErr.Error() || state.Path != first.path {
+		t.Fatalf("restart hid previous finalization failure: state=%+v error=%v", state, err)
+	}
+	if published != state {
+		t.Fatalf("published state=%+v, want %+v", published, state)
+	}
+	if created != 1 {
+		t.Fatalf("created %d recorders before reporting the previous failure", created)
+	}
+	if state, err := sessions.StartLogging(1, 0); err != nil || !state.Active || state.Error != "" || state.Path != second.path {
+		t.Fatalf("retry after reported failure: state=%+v error=%v", state, err)
+	}
+	if created != 2 || first.closeCalls != 2 {
+		t.Fatalf("recorder creations=%d previous close calls=%d, want 2 each", created, first.closeCalls)
+	}
+}
+
 func TestSessionCloseAndExitFinalizeRecorderOnce(t *testing.T) {
 	sessions := NewSessions(nil, nil)
 	if err := startLoggingTestShell(sessions, 1, "local", false); err != nil {
