@@ -181,7 +181,7 @@ func (s *Sessions) start(id int, options session.Options, label, kind string, au
 		// Settings reads and recorder creation share one bounded setup wait.
 		// A logging setup failure is reported through session:logging and must
 		// not prevent the terminal process from starting.
-		_, _ = managed.logging.Start(s.GetLoggingSettings)
+		_, _ = managed.logging.Start(s.GetLoggingSettings, 0)
 	}
 
 	// Recheck because shutdown or another start may have changed state while

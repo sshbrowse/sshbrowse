@@ -143,12 +143,14 @@ func nearestExistingDirectory(path string) string {
 }
 
 // StartLogging begins recording subsequent output for a running session.
-func (s *Sessions) StartLogging(id int) (SessionLoggingState, error) {
+// initialColumn aligns redraws with the current terminal cursor without
+// including text that was already on screen.
+func (s *Sessions) StartLogging(id, initialColumn int) (SessionLoggingState, error) {
 	managed, err := s.lookup(id)
 	if err != nil {
 		return SessionLoggingState{}, err
 	}
-	return managed.logging.Start(s.GetLoggingSettings)
+	return managed.logging.Start(s.GetLoggingSettings, initialColumn)
 }
 
 // StopLogging finalizes the current recording, if one is active.

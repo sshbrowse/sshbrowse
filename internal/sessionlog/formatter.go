@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/rivo/uniseg"
 )
 
 const (
-	maxEscapeBytes = 4096
-	maxLineRunes   = 16 * 1024
+	maxEscapeBytes  = 4096
+	maxLineColumns  = 16 * 1024
+	maxLineBytes    = 64 * 1024
+	maxClusterBytes = 256
 )
 
 type escapeState uint8
@@ -28,20 +32,29 @@ const (
 // formatter strips terminal control sequences and resolves basic line editing
 // while retaining only a bounded current line.
 type formatter struct {
-	state       escapeState
-	sequenceLen int
-	stringEsc   bool
-	stringC2    bool
-	utf8Pending []byte
+	state        escapeState
+	sequenceLen  int
+	stringEsc    bool
+	stringC2     bool
+	utf8Pending  []byte
+	csiParameter int
+	csiValid     bool
 
-	line   []rune
-	cursor int
+	// Each entry is one screen column. Empty entries continue the preceding
+	// grapheme; unwritten columns contain a space.
+	line        []string
+	lineBytes   int
+	cursor      int
+	outputStart int // Skip the unrecorded first-line prefix until it is redrawn.
 }
 
-func newFormatter() *formatter {
+func newFormatter(initialColumn int) *formatter {
+	initialColumn = min(maxLineColumns, max(0, initialColumn))
 	return &formatter{
+		cursor:      initialColumn,
+		outputStart: initialColumn,
 		utf8Pending: make([]byte, 0, utf8.UTFMax),
-		line:        make([]rune, 0, 256),
+		line:        make([]string, 0, 256),
 	}
 }
 
@@ -68,8 +81,7 @@ func (f *formatter) finish() []byte {
 	if len(f.line) > 0 {
 		f.writeLine(&output)
 	}
-	f.line = f.line[:0]
-	f.cursor = 0
+	f.resetLine()
 	f.state = escapeNormal
 	return output.Bytes()
 }
@@ -121,8 +133,7 @@ func (f *formatter) feedASCII(b byte, output *bytes.Buffer) {
 	switch b {
 	case '\n':
 		f.writeLine(output)
-		f.line = f.line[:0]
-		f.cursor = 0
+		f.resetLine()
 	case '\r':
 		f.cursor = 0
 	case '\b':
@@ -147,8 +158,7 @@ func (f *formatter) writeRune(r rune, output *bytes.Buffer) {
 		f.startControlString()
 		return
 	case '\u009b':
-		f.state = escapeCSI
-		f.sequenceLen = 0
+		f.startCSI()
 		return
 	case '\u009d':
 		f.startOSC()
@@ -159,28 +169,105 @@ func (f *formatter) writeRune(r rune, output *bytes.Buffer) {
 	if unicode.IsControl(r) {
 		return
 	}
-	if f.cursor >= maxLineRunes {
-		// A newline keeps a malicious or accidental unbroken stream bounded and
-		// makes each continuation readable in a plain-text transcript.
-		f.writeLine(output)
-		output.WriteString(" [line continued]\n")
-		f.line = f.line[:0]
-		f.cursor = 0
-	}
-	if f.cursor < len(f.line) {
-		f.line[f.cursor] = r
-	} else {
-		for len(f.line) < f.cursor {
-			f.line = append(f.line, ' ')
+	text := string(r)
+	if r >= utf8.RuneSelf && f.cursor > 0 && f.cursor <= len(f.line) {
+		start := f.cursor - 1
+		for start > 0 && f.line[start] == "" {
+			start--
 		}
-		f.line = append(f.line, r)
+		previous := f.line[start]
+		cluster, rest, width, _ := uniseg.FirstGraphemeClusterInString(previous+text, -1)
+		if rest == "" {
+			if len(cluster) <= maxClusterBytes {
+				if start+width > maxLineColumns {
+					// Move a growing grapheme to the continuation once, without
+					// emitting its earlier text presentation on the previous line.
+					f.truncateLine(start)
+				}
+				f.writeCluster(start, cluster, width, output)
+				return
+			}
+			// A combining stream must not grow one cell indefinitely or make
+			// grapheme segmentation progressively more expensive.
+			f.continueLine(output)
+		}
 	}
-	f.cursor++
+	width := 1
+	if r >= utf8.RuneSelf {
+		width = uniseg.StringWidth(text)
+	}
+	// Like a terminal, an unattached zero-width mark cannot advance the cursor.
+	if width > 0 {
+		f.writeCluster(f.cursor, text, width, output)
+	}
+}
+
+func (f *formatter) writeCluster(column int, text string, width int, output *bytes.Buffer) {
+	if column+width > maxLineColumns {
+		f.continueLine(output)
+		column = 0
+	}
+	end := column + width
+	for len(f.line) < end {
+		f.line = append(f.line, " ")
+		f.lineBytes++
+	}
+	f.eraseColumns(column, end)
+	f.lineBytes += len(text) - len(f.line[column])
+	f.line[column] = text
+	for i := column + 1; i < end; i++ {
+		f.lineBytes -= len(f.line[i])
+		f.line[i] = ""
+	}
+	f.cursor = end
+	f.outputStart = min(f.outputStart, column)
+	if f.lineBytes >= maxLineBytes {
+		f.continueLine(output)
+	}
+}
+
+func (f *formatter) continueLine(output *bytes.Buffer) {
+	f.writeLine(output)
+	output.WriteString(" [line continued]\n")
+	f.resetLine()
+}
+
+// Erasing any part of a wide grapheme clears its remaining columns too.
+func (f *formatter) eraseColumns(start, end int) {
+	if start >= end {
+		return
+	}
+	for start > 0 && f.line[start] == "" {
+		start--
+	}
+	for end < len(f.line) && f.line[end] == "" {
+		end++
+	}
+	for i := start; i < end; i++ {
+		f.lineBytes += 1 - len(f.line[i])
+		f.line[i] = " "
+	}
+}
+
+func (f *formatter) resetLine() {
+	clear(f.line)
+	f.line = f.line[:0]
+	f.lineBytes = 0
+	f.cursor = 0
+	f.outputStart = 0
+}
+
+func (f *formatter) truncateLine(end int) {
+	for _, cell := range f.line[end:] {
+		f.lineBytes -= len(cell)
+	}
+	clear(f.line[end:])
+	f.line = f.line[:end]
 }
 
 func (f *formatter) writeLine(output *bytes.Buffer) {
-	for _, r := range f.line {
-		output.WriteRune(r)
+	for _, cell := range f.line[min(f.outputStart, len(f.line)):] {
+		output.WriteString(cell)
 	}
 	output.WriteByte('\n')
 }
@@ -214,9 +301,7 @@ func (f *formatter) feedEscapeByte(b byte) {
 			f.state = escapeStart
 			f.sequenceLen = 0
 		case '[':
-			f.state = escapeCSI
-			f.stringEsc = false
-			f.stringC2 = false
+			f.startCSI()
 		case ']':
 			f.startOSC()
 		case 'P', '_', '^', 'X':
@@ -237,10 +322,17 @@ func (f *formatter) feedEscapeByte(b byte) {
 		}
 	case escapeCSI:
 		if b >= 0x40 && b <= 0x7e {
+			f.applyCSI(b)
 			f.state = escapeNormal
 		} else if b == 0x1b {
 			f.state = escapeStart
 			f.sequenceLen = 0
+		} else if b >= '0' && b <= '9' {
+			f.csiParameter = min(maxLineColumns, f.csiParameter*10+int(b-'0'))
+		} else {
+			// Private, intermediate, and multiple parameters are outside the
+			// single-line editing commands supported by this transcript.
+			f.csiValid = false
 		}
 	case escapeOSC:
 		f.feedControlStringByte(b, true)
@@ -262,6 +354,43 @@ func (f *formatter) feedEscapeByte(b byte) {
 		f.sequenceLen = 0
 		f.stringEsc = false
 		f.stringC2 = false
+	}
+}
+
+func (f *formatter) startCSI() {
+	f.state = escapeCSI
+	f.sequenceLen = 0
+	f.csiParameter = 0
+	f.csiValid = true
+}
+
+// Resolve the current-line cursor and erase commands used by shell redraws.
+// Other CSI commands remain filtered; this is not a screen emulator.
+func (f *formatter) applyCSI(command byte) {
+	if !f.csiValid {
+		return
+	}
+	count := max(1, f.csiParameter)
+	switch command {
+	case 'C':
+		f.cursor = min(maxLineColumns, f.cursor+count)
+	case 'D':
+		f.cursor = max(0, f.cursor-count)
+	case 'G':
+		f.cursor = count - 1
+	case 'K':
+		switch f.csiParameter {
+		case 0:
+			end := min(f.cursor, len(f.line))
+			f.eraseColumns(end, len(f.line))
+			f.truncateLine(end)
+		case 1:
+			f.eraseColumns(0, min(f.cursor+1, len(f.line)))
+		case 2:
+			cursor := f.cursor
+			f.resetLine()
+			f.cursor = cursor
+		}
 	}
 }
 

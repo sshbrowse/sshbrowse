@@ -8,7 +8,7 @@ import (
 )
 
 func TestFormatterHandlesChunkBoundariesAndTerminalControls(t *testing.T) {
-	format := newFormatter()
+	format := newFormatter(0)
 	chunks := [][]byte{
 		[]byte("ready \x1b[3"),
 		[]byte("1m猫\x1b[0m\x1b]0;title"),
@@ -42,7 +42,7 @@ func TestFormatterCancelsEscapeSequencesAndControlStrings(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			format := newFormatter()
+			format := newFormatter(0)
 			var output bytes.Buffer
 			output.Write(format.feed(append([]byte("prefix"), test.prefix...)))
 			output.Write(format.feed([]byte{test.cancel}))
@@ -56,16 +56,72 @@ func TestFormatterCancelsEscapeSequencesAndControlStrings(t *testing.T) {
 }
 
 func TestFormatterHandlesBackspaceAndIncompleteUTF8(t *testing.T) {
-	format := newFormatter()
+	format := newFormatter(0)
 	got := append(format.feed([]byte("abcde\rxy\bZ\n\xe2\x82")), format.finish()...)
 	if string(got) != "xZcde\n��\n" {
 		t.Fatalf("formatted transcript = %q", got)
 	}
 }
 
+func TestFormatterHandlesShellLineRedraws(t *testing.T) {
+	tests := []struct{ name, input, want string }{
+		{"progress", "longvalue\rshort\x1b[K\n", "short\n"},
+		{"readline replacement", "$ echo SECRET\r\x1b[C\x1b[C\x1b[Kecho ok\r\nok\r\n", "$ echo ok\nok\n"},
+		{"backspace deletion", "printf EDITED-BOGUS" + strings.Repeat("\b\x1b[K", 5) + "OK\n", "printf EDITED-OK\n"},
+		{"cursor left", "abcdef\x1b[3DXY\x1b[0K\n", "abcXY\n"},
+		{"erase prefix", "abcdef\x1b[3G\x1b[1KZ\n", "  Zdef\n"},
+		{"erase whole line", "abcdef\x1b[3G\x1b[2KZ\n", "  Z\n"},
+		{"C1 and zero distance", "abc\r\u009b0CX\u009bK\n", "aX\n"},
+		{"wide cursor left", "x界\x1b[2DY\x1b[K\n", "xY\n"},
+		{"combining cursor left", "xe\u0301\x1b[DY\x1b[K\n", "xY\n"},
+		{"wide absolute column", "a界z\x1b[4GZ\n", "a界Z\n"},
+		{"overwrite wide continuation", "界x\r\x1b[CZ\n", " Zx\n"},
+		{"erase wide prefix", "界x\x1b[2G\x1b[1K\n", "  x\n"},
+		{"joined emoji", "x👩‍💻\x1b[2DY\x1b[K\n", "xY\n"},
+		{"emoji variation selector", "x✈️\x1b[2DY\x1b[K\n", "xY\n"},
+		{"unsupported parameters", "abc\r\x1b[?2K\x1b[1;2K\x1b[3K\n", "abc\n"},
+		{"cursor at buffer limit", strings.Repeat("a", maxLineColumns) + "\x1b[99999999999999CZ\n", strings.Repeat("a", maxLineColumns) + "\n [line continued]\nZ\n"},
+		{"growing grapheme at limit", strings.Repeat("a", maxLineColumns-1) + "✈️\n", strings.Repeat("a", maxLineColumns-1) + "\n [line continued]\n✈️\n"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Deliver byte by byte to exercise split parameters and UTF-8 C1.
+			format := newFormatter(0)
+			var output bytes.Buffer
+			for i := range len(test.input) {
+				output.Write(format.feed([]byte{test.input[i]}))
+			}
+			output.Write(format.finish())
+			if got := output.String(); got != test.want {
+				t.Fatalf("formatted transcript = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestFormatterStartsAfterExistingPrompt(t *testing.T) {
+	format := newFormatter(11)
+	got := append(format.feed([]byte("echo SECRET\r\x1b[11C\x1b[Kecho ok\nnext line\n")), format.finish()...)
+	if string(got) != "echo ok\nnext line\n" {
+		t.Fatalf("recording after an existing prompt = %q", got)
+	}
+}
+
+func TestFormatterBoundsCombiningText(t *testing.T) {
+	format := newFormatter(0)
+	input := "e" + strings.Repeat("\u0301", maxLineBytes) + "Z\n"
+	got := append(format.feed([]byte(input)), format.finish()...)
+	if !bytes.Contains(got, []byte(" [line continued]\n")) || !bytes.HasSuffix(got, []byte("Z\n")) {
+		t.Fatal("overlong combining text did not continue and resume")
+	}
+	if len(got) > maxClusterBytes+64 || !utf8.Valid(got) {
+		t.Fatalf("combining text was not bounded valid UTF-8: %d bytes", len(got))
+	}
+}
+
 func TestFormatterDiscardsOverlongControlStringsAndResumes(t *testing.T) {
 	for _, sequence := range []string{"\x1b]", "\x1bP", "\u009d", "\u0090"} {
-		format := newFormatter()
+		format := newFormatter(0)
 		terminator := "\x1b\\"
 		if sequence == "\u009d" || sequence == "\u0090" {
 			terminator = "\u009c"
@@ -91,7 +147,7 @@ func TestFormatterDiscardsOverlongControlStringsAndResumes(t *testing.T) {
 }
 
 func TestFormatterHandlesSplitC1IntroducersAndTerminators(t *testing.T) {
-	format := newFormatter()
+	format := newFormatter(0)
 	chunks := [][]byte{
 		[]byte("a\xc2"),
 		[]byte("\x9b31mred\xc2\x9dhidden\xc2"),
@@ -124,7 +180,7 @@ func TestFormatterSuppressesAllOtherC1Controls(t *testing.T) {
 			controls.WriteRune('\u009c')
 		}
 	}
-	format := newFormatter()
+	format := newFormatter(0)
 	got := append(format.feed([]byte(controls.String()+"visible\n")), format.finish()...)
 	if string(got) != "visible\n" {
 		t.Fatalf("C1 controls leaked into transcript: %q", got)
@@ -145,7 +201,7 @@ func assertNoC1Controls(t *testing.T, text string) {
 }
 
 func TestFormatterRecoversFromRepeatedEscapeBytes(t *testing.T) {
-	format := newFormatter()
+	format := newFormatter(0)
 	got := append(format.feed([]byte("before\x1b\x1b[31mred\n")), format.finish()...)
 	if string(got) != "beforered\n" {
 		t.Fatalf("malformed escape sequence leaked into transcript: %q", got)
@@ -153,8 +209,8 @@ func TestFormatterRecoversFromRepeatedEscapeBytes(t *testing.T) {
 }
 
 func TestFormatterBoundsLongLinesAndTabAfterLimit(t *testing.T) {
-	format := newFormatter()
-	input := strings.Repeat("a", maxLineRunes) + "\tZ\n"
+	format := newFormatter(0)
+	input := strings.Repeat("a", maxLineColumns) + "\tZ\n"
 	got := append(format.feed([]byte(input)), format.finish()...)
 	if !strings.Contains(string(got), " [line continued]\n") {
 		t.Fatal("expected an explicit continuation marker for a long line")
@@ -162,7 +218,7 @@ func TestFormatterBoundsLongLinesAndTabAfterLimit(t *testing.T) {
 	if !strings.HasSuffix(string(got), "Z\n") {
 		t.Fatalf("tab after a full line was not processed: suffix %q", string(got)[len(got)-20:])
 	}
-	if len(format.line) > maxLineRunes {
+	if len(format.line) > maxLineColumns {
 		t.Fatalf("formatter line buffer grew to %d runes", len(format.line))
 	}
 }

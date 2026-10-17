@@ -539,7 +539,7 @@
     loggingBusy = true;
     loggingActionError = "";
     try {
-      const next = stopping ? await Sessions.StopLogging(id) : await Sessions.StartLogging(id);
+      const next = stopping ? await Sessions.StopLogging(id) : await Sessions.StartLogging(id, terminal.buffer.active.cursorX);
       if (!disposed && canApplyLoggingResult(next.id, loggingProcessId, revision, loggingRevision)) {
         applyLoggingState(next);
       }

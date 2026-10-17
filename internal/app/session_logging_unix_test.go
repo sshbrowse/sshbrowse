@@ -113,11 +113,7 @@ func TestAutomaticLoggingFailureDoesNotPreventSessionStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	sessions := NewSessions(nil, store)
-	err := sessions.start(1, session.Options{
-		Argv: []string{"/bin/sh", "-c", "sleep 30"},
-		Cols: 80,
-		Rows: 24,
-	}, "test", "ssh", true)
+	err := startLoggingTestShell(sessions, 1, "ssh", true)
 	if err != nil {
 		t.Fatalf("logging failure stopped session startup: %v", err)
 	}
@@ -197,11 +193,7 @@ func TestAutomaticRecordingFinalizesWhenProcessExitsImmediately(t *testing.T) {
 		t.Fatalf("transcript does not contain the process exit footer: %q", content)
 	}
 
-	if err := sessions.start(1, session.Options{
-		Argv: []string{"/bin/sh", "-c", "sleep 30"},
-		Cols: 80,
-		Rows: 24,
-	}, "test", "local", false); err != nil {
+	if err := startLoggingTestShell(sessions, 1, "local", false); err != nil {
 		t.Fatalf("reuse session id: %v", err)
 	}
 	state = liveLoggingState(t, sessions, 1)
@@ -230,14 +222,10 @@ func TestTimedOutRecorderIsRetainedAndMustCloseBeforeRestart(t *testing.T) {
 		}
 		return second, nil
 	}
-	if err := sessions.start(1, session.Options{
-		Argv: []string{"/bin/sh", "-c", "sleep 30"},
-		Cols: 80,
-		Rows: 24,
-	}, "test", "local", false); err != nil {
+	if err := startLoggingTestShell(sessions, 1, "local", false); err != nil {
 		t.Fatal(err)
 	}
-	if state, err := sessions.StartLogging(1); err != nil || !state.Active {
+	if state, err := sessions.StartLogging(1, 0); err != nil || !state.Active {
 		t.Fatalf("start first recording: state=%+v error=%v", state, err)
 	}
 	if state, err := sessions.StopLogging(1); !errors.Is(err, sessionlog.ErrCloseTimeout) || state.Active {
@@ -253,13 +241,13 @@ func TestTimedOutRecorderIsRetainedAndMustCloseBeforeRestart(t *testing.T) {
 	if !retained {
 		t.Fatal("timed-out recorder handle was discarded")
 	}
-	if state, err := sessions.StartLogging(1); !errors.Is(err, sessionlog.ErrCloseTimeout) || state.Active {
+	if state, err := sessions.StartLogging(1, 0); !errors.Is(err, sessionlog.ErrCloseTimeout) || state.Active {
 		t.Fatalf("restart with an unfinalized recorder: state=%+v error=%v", state, err)
 	}
 	if created != 1 {
 		t.Fatalf("created %d additional recorders before prior close completed", created-1)
 	}
-	if state, err := sessions.StartLogging(1); err != nil || !state.Active {
+	if state, err := sessions.StartLogging(1, 0); err != nil || !state.Active {
 		t.Fatalf("restart after close retry: state=%+v error=%v", state, err)
 	}
 	if created != 2 {
@@ -275,11 +263,7 @@ func TestTimedOutRecorderIsRetainedAndMustCloseBeforeRestart(t *testing.T) {
 
 func TestSessionCloseAndExitFinalizeRecorderOnce(t *testing.T) {
 	sessions := NewSessions(nil, nil)
-	if err := sessions.start(1, session.Options{
-		Argv: []string{"/bin/sh", "-c", "sleep 30"},
-		Cols: 80,
-		Rows: 24,
-	}, "test", "local", false); err != nil {
+	if err := startLoggingTestShell(sessions, 1, "local", false); err != nil {
 		t.Fatal(err)
 	}
 	recorder := &blockedCloseRecorder{
@@ -370,6 +354,14 @@ func (r *deferredCloseRecorder) Close(string) error {
 func (r *deferredCloseRecorder) Path() string          { return r.path }
 func (r *deferredCloseRecorder) Done() <-chan struct{} { return r.done }
 
+func startLoggingTestShell(sessions *Sessions, id int, kind string, automatic bool) error {
+	return sessions.start(id, session.Options{
+		Argv: []string{"/bin/sh", "-c", "sleep 30"},
+		Cols: 80,
+		Rows: 24,
+	}, "test", kind, automatic)
+}
+
 func testLoggingStore(t *testing.T) (*profile.Store, string) {
 	t.Helper()
 	directory := t.TempDir()
@@ -449,11 +441,7 @@ func TestBlockedSettingsReadTimesOutAndLateSetupStaysBounded(t *testing.T) {
 		factoryStarted <- struct{}{}
 		return recorder, nil
 	}
-	if err := sessions.start(19, session.Options{
-		Argv: []string{"/bin/sh", "-c", "sleep 30"},
-		Cols: 80,
-		Rows: 24,
-	}, "test", "local", false); err != nil {
+	if err := startLoggingTestShell(sessions, 19, "local", false); err != nil {
 		t.Fatalf("start session: %v", err)
 	}
 	managed, err := sessions.lookup(19)
@@ -475,7 +463,7 @@ func TestBlockedSettingsReadTimesOutAndLateSetupStaysBounded(t *testing.T) {
 	}
 	result := make(chan setupResult, 1)
 	go func() {
-		state, err := managed.logging.Start(loadSettings)
+		state, err := managed.logging.Start(loadSettings, 0)
 		result <- setupResult{state: state, err: err}
 	}()
 	select {
@@ -499,7 +487,7 @@ func TestBlockedSettingsReadTimesOutAndLateSetupStaysBounded(t *testing.T) {
 	if len(sessions.recordingSetupSlots) != 1 {
 		t.Fatalf("setup slots after settings timeout = %d, want 1", len(sessions.recordingSetupSlots))
 	}
-	if _, err := managed.logging.Start(loadSettings); err == nil || !strings.Contains(err.Error(), "pending") {
+	if _, err := managed.logging.Start(loadSettings, 0); err == nil || !strings.Contains(err.Error(), "pending") {
 		t.Fatalf("retry while settings loader remained blocked: %v", err)
 	}
 
@@ -568,11 +556,7 @@ func TestAutomaticSetupTimeoutAllowsTerminalAndLateRetry(t *testing.T) {
 	}
 
 	started := time.Now()
-	if err := sessions.start(1, session.Options{
-		Argv: []string{"/bin/sh", "-c", "sleep 30"},
-		Cols: 80,
-		Rows: 24,
-	}, "test", "ssh", true); err != nil {
+	if err := startLoggingTestShell(sessions, 1, "ssh", true); err != nil {
 		t.Fatalf("automatic setup timeout prevented terminal start: %v", err)
 	}
 	if elapsed := time.Since(started); elapsed > time.Second {
@@ -593,7 +577,7 @@ func TestAutomaticSetupTimeoutAllowsTerminalAndLateRetry(t *testing.T) {
 	if !strings.Contains(state.Error, "timed out") {
 		t.Fatalf("state after automatic setup timeout = %+v", state)
 	}
-	if _, err := sessions.StartLogging(1); err == nil || !strings.Contains(err.Error(), "pending") {
+	if _, err := sessions.StartLogging(1, 0); err == nil || !strings.Contains(err.Error(), "pending") {
 		t.Fatalf("retry while first factory was pending: %v", err)
 	}
 	factoryMu.Lock()
@@ -612,7 +596,7 @@ func TestAutomaticSetupTimeoutAllowsTerminalAndLateRetry(t *testing.T) {
 	if len(sessions.recordingSetupSlots) != 1 {
 		t.Fatalf("setup slots after close timeout = %d, want 1 until writer completion", len(sessions.recordingSetupSlots))
 	}
-	if _, err := sessions.StartLogging(1); err == nil || !strings.Contains(err.Error(), "pending") {
+	if _, err := sessions.StartLogging(1, 0); err == nil || !strings.Contains(err.Error(), "pending") {
 		t.Fatalf("retry before late writer completion: %v", err)
 	}
 	close(late.done)
@@ -622,7 +606,7 @@ func TestAutomaticSetupTimeoutAllowsTerminalAndLateRetry(t *testing.T) {
 	}
 	waitForSetupCleared(t, managed)
 	waitForSetupSlotCount(t, sessions, 0)
-	state, err = sessions.StartLogging(1)
+	state, err = sessions.StartLogging(1, 0)
 	if err != nil || !state.Active {
 		t.Fatalf("retry after late writer completion: state=%+v error=%v", state, err)
 	}
@@ -648,14 +632,10 @@ func TestAcceptedRecorderKeepsSetupSlotUntilWriterCompletion(t *testing.T) {
 	sessions.makeRecorder = func(sessionlog.Options) (sessionRecorder, error) {
 		return recorder, nil
 	}
-	if err := sessions.start(18, session.Options{
-		Argv: []string{"/bin/sh", "-c", "sleep 30"},
-		Cols: 80,
-		Rows: 24,
-	}, "test", "ssh", false); err != nil {
+	if err := startLoggingTestShell(sessions, 18, "ssh", false); err != nil {
 		t.Fatalf("start session: %v", err)
 	}
-	if state, err := sessions.StartLogging(18); err != nil || !state.Active {
+	if state, err := sessions.StartLogging(18, 0); err != nil || !state.Active {
 		t.Fatalf("start recording: state=%+v error=%v", state, err)
 	}
 	managed, err := sessions.lookup(18)
@@ -698,11 +678,7 @@ func TestCloseDoesNotWaitForBlockedRecorderFactory(t *testing.T) {
 		<-releaseNew
 		return late, nil
 	}
-	if err := sessions.start(2, session.Options{
-		Argv: []string{"/bin/sh", "-c", "sleep 30"},
-		Cols: 80,
-		Rows: 24,
-	}, "test", "ssh", true); err != nil {
+	if err := startLoggingTestShell(sessions, 2, "ssh", true); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -754,11 +730,7 @@ func TestShutdownCancelsPendingRecorderSetup(t *testing.T) {
 	}
 	startResult := make(chan error, 1)
 	go func() {
-		startResult <- sessions.start(3, session.Options{
-			Argv: []string{"/bin/sh", "-c", "sleep 30"},
-			Cols: 80,
-			Rows: 24,
-		}, "test", "ssh", true)
+		startResult <- startLoggingTestShell(sessions, 3, "ssh", true)
 	}()
 	select {
 	case <-newEntered:
@@ -817,17 +789,13 @@ func TestRecorderSetupConcurrencyLimitDoesNotStartAnotherFactory(t *testing.T) {
 		factoryCalls++
 		return &retryTestRecorder{path: "/tmp/unexpected.txt"}, nil
 	}
-	if err := sessions.start(16, session.Options{
-		Argv: []string{"/bin/sh", "-c", "sleep 30"},
-		Cols: 80,
-		Rows: 24,
-	}, "test", "local", false); err != nil {
+	if err := startLoggingTestShell(sessions, 16, "local", false); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < cap(sessions.recordingSetupSlots); i++ {
 		sessions.recordingSetupSlots <- struct{}{}
 	}
-	if _, err := sessions.StartLogging(16); err == nil || !strings.Contains(err.Error(), "concurrency limit") {
+	if _, err := sessions.StartLogging(16, 0); err == nil || !strings.Contains(err.Error(), "concurrency limit") {
 		t.Fatalf("StartLogging with exhausted setup slots = %v, want limit error", err)
 	}
 	if factoryCalls != 0 {
@@ -851,11 +819,7 @@ func TestRecorderFailureCannotEmitBeforeStaleActiveState(t *testing.T) {
 		onErrorReady <- options.OnError
 		return &retryTestRecorder{path: filepath.Join(directory, "event-order.txt")}, nil
 	}
-	if err := sessions.start(17, session.Options{
-		Argv: []string{"/bin/sh", "-c", "sleep 30"},
-		Cols: 80,
-		Rows: 24,
-	}, "test", "local", false); err != nil {
+	if err := startLoggingTestShell(sessions, 17, "local", false); err != nil {
 		t.Fatal(err)
 	}
 	managed, err := sessions.lookup(17)
@@ -865,7 +829,7 @@ func TestRecorderFailureCannotEmitBeforeStaleActiveState(t *testing.T) {
 	managed.logging.eventMu.Lock()
 	startResult := make(chan error, 1)
 	go func() {
-		_, err := sessions.StartLogging(17)
+		_, err := sessions.StartLogging(17, 0)
 		startResult <- err
 	}()
 	var onError func(error)

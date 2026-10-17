@@ -31,7 +31,9 @@ type Options struct {
 	Directory string
 	Label     string
 	Kind      string
-	OnError   func(error)
+	// InitialColumn aligns edits with an already visible prompt without logging it.
+	InitialColumn int
+	OnError       func(error)
 }
 
 // Recorder writes a readable transcript on a background goroutine. Write only
@@ -179,7 +181,7 @@ func (r *Recorder) Done() <-chan struct{} { return r.done }
 
 func (r *Recorder) run(writer *transcriptWriter) {
 	defer close(r.done)
-	formatter := newFormatter()
+	formatter := newFormatter(r.options.InitialColumn)
 	writerFailed := false
 	for chunk := range r.queue {
 		if writerFailed {

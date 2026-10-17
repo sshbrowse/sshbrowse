@@ -2,8 +2,6 @@ package app
 
 import (
 	"errors"
-	"fmt"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -13,6 +11,7 @@ import (
 type sessionRecorder interface {
 	Write([]byte) error
 	Close(string) error
+	// Path returns the absolute transcript path established by the constructor.
 	Path() string
 	// Done closes after the writer releases its file, even if Close timed out.
 	Done() <-chan struct{}
@@ -98,7 +97,7 @@ func (c *loggingController) State() SessionLoggingState {
 	return c.state
 }
 
-func (c *loggingController) Start(loadSettings func() (LoggingSettings, error)) (SessionLoggingState, error) {
+func (c *loggingController) Start(loadSettings func() (LoggingSettings, error), initialColumn int) (SessionLoggingState, error) {
 	c.opMu.Lock()
 
 	c.mu.Lock()
@@ -174,7 +173,7 @@ func (c *loggingController) Start(loadSettings func() (LoggingSettings, error)) 
 		timeout = defaultRecordingSetupTimeout
 	}
 	deadline := time.Now().Add(timeout)
-	go c.runSetup(pending, generation, loadSettings, makeRecorder)
+	go c.runSetup(pending, generation, initialColumn, loadSettings, makeRecorder)
 
 	timer := time.NewTimer(time.Until(deadline))
 	defer timer.Stop()
@@ -195,16 +194,17 @@ func (c *loggingController) reserveSetupSlot() error {
 	}
 }
 
-func (c *loggingController) runSetup(pending *recordingSetup, generation uint64, loadSettings func() (LoggingSettings, error), makeRecorder func(sessionlog.Options) (sessionRecorder, error)) {
+func (c *loggingController) runSetup(pending *recordingSetup, generation uint64, initialColumn int, loadSettings func() (LoggingSettings, error), makeRecorder func(sessionlog.Options) (sessionRecorder, error)) {
 	defer func() { <-c.setupSlots }()
 
 	settings, err := loadSettings()
 	var recorder sessionRecorder
 	if err == nil {
 		options := sessionlog.Options{
-			Directory: settings.Directory,
-			Label:     c.label,
-			Kind:      c.kind,
+			Directory:     settings.Directory,
+			Label:         c.label,
+			Kind:          c.kind,
+			InitialColumn: initialColumn,
 			OnError: func(err error) {
 				c.fail(generation, err)
 			},
@@ -220,17 +220,6 @@ func (c *loggingController) runSetup(pending *recordingSetup, generation uint64,
 	}
 	if err == nil {
 		path = recorder.Path()
-		if path == "" {
-			err = errors.New("session logging recorder returned an empty path")
-		} else if resolvedPath, resolveErr := filepath.Abs(path); resolveErr != nil {
-			err = fmt.Errorf("resolve session log path: %w", resolveErr)
-		} else {
-			path = filepath.Clean(resolvedPath)
-		}
-	}
-	if err != nil && recorder != nil {
-		closeLateSetupRecorder(recorder, "recording setup failed")
-		recorder = nil
 	}
 
 	c.mu.Lock()
