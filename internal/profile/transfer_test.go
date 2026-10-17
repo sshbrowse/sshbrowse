@@ -53,6 +53,34 @@ func TestSnapshotPreservesConnectionData(t *testing.T) {
 	}
 }
 
+func TestImportPreservesLocalRecordingFolder(t *testing.T) {
+	for _, replace := range []bool{false, true} {
+		t.Run(fmt.Sprintf("replace=%v", replace), func(t *testing.T) {
+			store := NewStore(filepath.Join(t.TempDir(), "connections.json"))
+			settings := SessionLoggingSettings{Directory: filepath.Join(t.TempDir(), "logs")}
+			if err := store.SaveLoggingSettings(settings); err != nil {
+				t.Fatal(err)
+			}
+			current, err := store.Snapshot()
+			if err != nil {
+				t.Fatal(err)
+			}
+			incoming := Snapshot{Connections: []Connection{{ID: "demo", Host: "example.invalid", LogOutput: true}}}
+			if _, err := store.ApplySnapshot(incoming, replace, SnapshotRevision(current), nil); err != nil {
+				t.Fatal(err)
+			}
+			got, err := store.LoggingSettings()
+			if err != nil || got == nil || *got != settings {
+				t.Fatalf("recording folder after import = %+v, error = %v; want %+v", got, err, settings)
+			}
+			connections, err := store.List()
+			if err != nil || len(connections) != 1 || !connections[0].LogOutput {
+				t.Fatalf("auto-record preference after import = %+v, error = %v", connections, err)
+			}
+		})
+	}
+}
+
 func TestApplySnapshotMergeRelinksCollisionsAndIsIdempotent(t *testing.T) {
 	store := NewStore(filepath.Join(t.TempDir(), "connections.json"))
 	if err := store.write(fileFormat{Connections: []Connection{{ID: "hop", Host: "local-hop", Name: "Local hop"}}, Folders: []string{}}); err != nil {

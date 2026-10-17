@@ -23,6 +23,7 @@ SSHBrowse does not implement the SSH protocol itself, proxy SSH traffic through 
 - Choose a saved connection as a jump host, or enter a raw ProxyJump route
 - Open SSH, SFTP, and local terminal sessions
 - Search terminal output and configure scrollback history
+- [Record terminal output](docs/usage.md#session-logging) to text files
 - Work with tabs or tiled terminals
 - Save and reopen named workspace layouts
 - Send commands or live input to multiple sessions

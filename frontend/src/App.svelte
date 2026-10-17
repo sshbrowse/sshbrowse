@@ -10,6 +10,7 @@
   import { Browser, Clipboard, Events, Window as WailsWindow } from "@wailsio/runtime";
   import * as Sessions from "../bindings/sshbrowse/internal/app/sessions";
   import * as Workspaces from "../bindings/sshbrowse/internal/app/workspaces";
+  import type { LoggingSettings } from "../bindings/sshbrowse/internal/app/models";
   import type { Connection } from "../bindings/sshbrowse/internal/profile/models";
   import Sidebar from "./lib/Sidebar.svelte";
   import TabBar from "./lib/TabBar.svelte";
@@ -100,6 +101,13 @@
   import { tileGrid } from "./lib/tileLayout";
   import { errorMessage } from "./lib/errors";
   import {
+    appendSessionCloseError,
+    createRequestGeneration,
+    dismissSessionCloseError,
+    runLatestRequest,
+    type SessionCloseErrorNotice,
+  } from "./lib/sessionLogging";
+  import {
     loadPreferences,
     normalizeTerminalScrollback,
     terminalScrollbackDefault,
@@ -169,6 +177,16 @@
   let settingsOpen = $state(false);
   let backupBusy = $state(false);
   let preferenceRevision = $state(0);
+  let loggingSettings = $state<LoggingSettings>({ directory: "" });
+  let loggingSettingsLoading = $state(false);
+  let loggingSettingsReady = $state(false);
+  let loggingSettingsBusy = $state(false);
+  let loggingSettingsStatus = $state("");
+  let loggingSettingsError = $state("");
+  const loggingSettingsRequests = createRequestGeneration();
+  let loggingSettingsSaveInFlight: Promise<void> | null = null;
+  let sessionCloseErrors = $state<SessionCloseErrorNotice[]>([]);
+  let nextSessionCloseErrorId = 1;
   let scanningImport = $state(false);
   let copiedConnection = $state<Connection | null>(null);
   // When the form was opened to bookmark an unsaved session, that session adopts the result.
@@ -593,15 +611,108 @@
     }
     closeBroadcastBar(false);
     rememberDialogFocus();
+    void loadLoggingSettings();
     settingsOpen = true;
+  }
+
+  async function loadLoggingSettings() {
+    const requestId = loggingSettingsRequests.next();
+    loggingSettingsLoading = true;
+    loggingSettingsReady = false;
+    loggingSettingsError = "";
+    loggingSettingsStatus = "";
+
+    // A reopened Settings page should read after any save already in progress,
+    // so an early load cannot replace values that the save commits later.
+    if (loggingSettingsSaveInFlight !== null) {
+      loggingSettingsBusy = true;
+      await loggingSettingsSaveInFlight;
+      if (!loggingSettingsRequests.isCurrent(requestId)) {
+        return;
+      }
+      loggingSettingsBusy = false;
+    }
+
+    await runLatestRequest(
+      loggingSettingsRequests,
+      requestId,
+      () => Sessions.GetLoggingSettings(),
+      {
+        onSuccess: (settings) => {
+          loggingSettings = settings;
+          loggingSettingsReady = true;
+        },
+        onError: (error) => {
+          loggingSettingsError = `Could not load logging settings: ${errorMessage(error)}`;
+        },
+        onFinally: () => {
+          loggingSettingsLoading = false;
+        },
+      },
+    );
+  }
+
+  async function chooseLoggingDirectory() {
+    if (loggingSettingsLoading || !loggingSettingsReady || loggingSettingsBusy) {
+      return;
+    }
+    const requestId = loggingSettingsRequests.next();
+    loggingSettingsBusy = true;
+    loggingSettingsLoading = false;
+    loggingSettingsError = "";
+    loggingSettingsStatus = "";
+    const saveRequest = runLatestRequest(
+      loggingSettingsRequests,
+      requestId,
+      async () => {
+        const directory = await Sessions.ChooseLoggingDirectory();
+        return directory ? Sessions.SaveLoggingSettings({ directory }) : null;
+      },
+      {
+        onSuccess: (settings) => {
+          if (settings !== null) {
+            loggingSettings = settings;
+            loggingSettingsStatus = "Recording folder saved.";
+          }
+        },
+        onError: (error) => {
+          loggingSettingsError = `Could not change the recording folder: ${errorMessage(error)}`;
+        },
+        onFinally: () => {
+          loggingSettingsBusy = false;
+        },
+      },
+    );
+    loggingSettingsSaveInFlight = saveRequest;
+    try {
+      await saveRequest;
+    } finally {
+      if (loggingSettingsSaveInFlight === saveRequest) {
+        loggingSettingsSaveInFlight = null;
+      }
+    }
   }
 
   function closeSettings() {
     if (backupBusy) {
       return;
     }
+    loggingSettingsRequests.invalidate();
+    loggingSettingsLoading = false;
+    loggingSettingsBusy = false;
     settingsOpen = false;
     closeDialog(true);
+  }
+
+  function reportSessionCloseError(sessionLabel: string, logPath: string, message: string) {
+    const details = [
+      `Could not finish closing ${sessionLabel}: ${message}`,
+      logPath ? `Log file: ${logPath}` : "",
+    ].filter(Boolean).join(". ");
+    sessionCloseErrors = appendSessionCloseError(
+      sessionCloseErrors,
+      { id: nextSessionCloseErrorId++, message: details },
+    );
   }
 
   function toggleSidebar(focusTarget?: HTMLElement) {
@@ -1812,6 +1923,16 @@
         <button aria-label="Dismiss error" title="Dismiss" onclick={() => (operationError = "")}><X size={16} /></button>
       </div>
     {/if}
+    {#each sessionCloseErrors as closeError (closeError.id)}
+      <div class="operation-error" role="alert">
+        <span>{closeError.message}</span>
+        <button
+          aria-label="Dismiss session close error"
+          title="Dismiss"
+          onclick={() => (sessionCloseErrors = dismissSessionCloseError(sessionCloseErrors, closeError.id))}
+        ><X size={16} /></button>
+      </div>
+    {/each}
     {#if broadcastBarOpen}
       <BroadcastBar
         {sessions}
@@ -1945,6 +2066,7 @@
               onpastewarningschange={setTerminalPasteWarningsDisabled}
               onfocus={() => selectSession(session.id)}
               onclose={() => requestClose({ kind: "session", id: session.id })}
+              oncloseerror={reportSessionCloseError}
             />
           {:else if terminalPaneLoadError}
             <div class="terminal-placeholder terminal-load-error" role="alert">
@@ -1994,6 +2116,13 @@
       {updateReady}
       {checkUpdatesOnStartup}
       {updateReleaseURL}
+      loggingDirectory={loggingSettings.directory}
+      {loggingSettingsLoading}
+      {loggingSettingsReady}
+      {loggingSettingsBusy}
+      {loggingSettingsStatus}
+      {loggingSettingsError}
+      onreloadloggingsettings={() => { void loadLoggingSettings(); }}
       onstartupupdatechange={setCheckUpdatesOnStartup}
       onreleasenotes={openUpdateRelease}
       oncheckforupdates={emitCheckForUpdates}
@@ -2010,6 +2139,7 @@
       onrightclickpastechange={setRightClickToPaste}
       oncopyselectionchange={setCopyOnSelection}
       onpastewarningschange={setTerminalPasteWarningsDisabled}
+      onchooseloggingdirectory={chooseLoggingDirectory}
       onclose={closeSettings}
     />
   {/if}

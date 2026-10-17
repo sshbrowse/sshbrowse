@@ -317,6 +317,17 @@
         </div>
       </details>
 
+      <section class="section" aria-labelledby="logging-section-heading">
+        <div class="section-heading"><h3 id="logging-section-heading">Session logging</h3></div>
+        <div class="checks">
+          <label>
+            <input type="checkbox" bind:checked={draft.logOutput} disabled={submitting} />
+            Log terminal output automatically
+          </label>
+        </div>
+        <p class="hint">Logs can contain sensitive output, including echoed commands.</p>
+      </section>
+
       <details class="section disclosure" bind:open={tunnelsOpen}>
         <summary>
           <span>

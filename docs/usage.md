@@ -23,6 +23,23 @@ Your system's OpenSSH handles authentication, host keys, and SSH configuration.
   Check the visible recipient count before sending. Live input requires at least
   two live terminals, including the focused terminal; use **Stop** to end it.
 
+## Session logging
+
+Use **Record** in an SSH, SFTP, or local terminal pane to save new output as text.
+**Stop** ends the recording. The pane shows the file path. Enable **Log terminal
+output automatically** on a saved connection to record from startup.
+
+Recordings default to
+`~/SSHBrowse/logs/YYYY-MM-DD/hostname-YYYY-MM-DD_HH-MM-SS.txt`, using the local
+start time, with start and end timestamps inside the file. Choose another root
+folder in **Settings > Logging**.
+
+Each recording uses one file and stops at 100 MiB while the terminal keeps
+running. Old logs are kept until you delete them. Logs can contain sensitive
+output, and SSHBrowse does not redact or encrypt them. Full-screen programs and
+characters rendered with different Unicode width rules may not produce an
+accurate transcript.
+
 ## Backup and restore
 
 Use **Settings > Backup & restore** to move connections, folders, and jump-host
