@@ -1140,6 +1140,7 @@
   }
 
   function emitCheckForUpdates() {
+    if (backupBusy) return;
     startupPromptWanted = false;
     updatePrompt = null;
     if (updateReady) {
@@ -1154,6 +1155,7 @@
   }
 
   function setCheckUpdatesOnStartup(enabled: boolean) {
+    if (backupBusy) return;
     checkUpdatesOnStartup = enabled;
     persistPreference(preferenceKeys.checkUpdatesOnStartup, String(enabled));
     if (!enabled) updatePrompt = null;
@@ -1174,6 +1176,7 @@
   }
 
   function emitDownloadUpdate() {
+    if (backupBusy) return;
     updatePrompt = null;
     Events.Emit(updateDownloadRequestEvent).catch((error) => {
       updateStatus = `Could not start the update download: ${errorMessage(error)}`;
@@ -1182,6 +1185,7 @@
   }
 
   function emitRestartUpdate() {
+    if (backupBusy) return;
     Events.Emit(updateRestartRequestEvent).catch((error) => {
       updateStatus = `Could not restart to apply the update: ${errorMessage(error)}`;
       updateError = true;

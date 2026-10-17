@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 import { canCheckForUpdates, claimStartupUpdateCheck, githubReleaseURL } from "../src/lib/updates.ts";
+import { preferenceKeys } from "../src/lib/storage.ts";
 
 // Execute the real App event callbacks without requiring a desktop WebView.
 // TypeScript's AST keeps this harness independent of callback formatting.
@@ -11,7 +12,11 @@ const source = readFileSync(new URL("../src/App.svelte", import.meta.url), "utf8
 const script = source.slice(source.indexOf('>', source.indexOf('<script')) + 1, source.indexOf('</script>'));
 const ast = ts.createSourceFile("App.ts", script, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const callbacks = new Map<string, string>();
+const actions = new Map<string, string>();
 function visit(node: ts.Node) {
+  if (ts.isFunctionDeclaration(node) && node.name && ["emitCheckForUpdates", "emitDownloadUpdate", "emitRestartUpdate", "setCheckUpdatesOnStartup"].includes(node.name.text)) {
+    actions.set(node.name.text, node.getText(ast));
+  }
   if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text.startsWith("offUpdate") && node.initializer && ts.isCallExpression(node.initializer)) {
     const callback = node.initializer.arguments[1];
     if (callback) callbacks.set(node.name.text, callback.getText(ast));
@@ -30,12 +35,17 @@ function app(storageUnavailable = false) {
   const state = {
     updateInfo: null, startupCheckScheduled: false, checkUpdatesOnStartup: true,
     startupPromptWanted: true, updatePrompt: null, updateStatus: "", updateError: false,
-    updateBusy: false, updateAvailable: false, updateReady: false, updateReleaseURL: "",
+    updateBusy: false, updateAvailable: false, updateReady: false, updateReleaseURL: "", backupBusy: false,
     updateCheckStartedAt: 0, updateCheckResultTimer: null, manualUpdateCheckMinimumDurationMs: 1000,
     setTimeout: (callback: () => void, delay: number) => { const id = nextTimerId++; timers.set(id, callback); timerDelays.push(delay); return id; },
     clearTimeout: (id: number) => { timers.delete(id); },
     canCheckForUpdates, claimStartupUpdateCheck, githubReleaseURL,
     startupUpdateCheckEvent: "update:startup-check",
+    checkForUpdatesMenuEvent: "menu:checkForUpdates",
+    updateDownloadRequestEvent: "wails:updater:download",
+    updateRestartRequestEvent: "wails:updater:restart",
+    preferenceKeys,
+    persistPreference: (key: string, value: string) => { values.set(key, value); },
     Events: { Emit: (name: string) => { emitted.push(name); return Promise.resolve(); } },
     localStorage: storage,
   };
@@ -53,9 +63,33 @@ function app(storageUnavailable = false) {
     timers.clear();
     for (const callback of pending) callback();
   }
-  return { state, send, emitted, runTimers, timerDelays, timers };
+  function runAction(name: string, ...args: unknown[]) {
+    const action = actions.get(name);
+    assert.ok(action, `missing ${name} action`);
+    context.args = args;
+    vm.runInContext(ts.transpile(`(${action})(...args)`, { target: ts.ScriptTarget.ES2022 }), context);
+  }
+  return { state, send, emitted, runTimers, timerDelays, timers, runAction, values };
 }
 const release = { automatic: true, checked: true, version: "2.0.0", releaseURL: "https://github.com/sshbrowse/sshbrowse/releases/tag/v2.0.0", error: "" };
+
+test("backup operations block update actions and preference writes until they finish", () => {
+  const { state, runAction, emitted, values } = app();
+  values.set(preferenceKeys.checkUpdatesOnStartup, "true");
+  state.backupBusy = true;
+  for (const name of ["emitCheckForUpdates", "emitDownloadUpdate", "emitRestartUpdate"]) runAction(name);
+  runAction("setCheckUpdatesOnStartup", false);
+  assert.deepEqual(emitted, []);
+  assert.equal(state.checkUpdatesOnStartup, true);
+  assert.equal(values.get(preferenceKeys.checkUpdatesOnStartup), "true");
+
+  state.backupBusy = false;
+  for (const name of ["emitCheckForUpdates", "emitDownloadUpdate", "emitRestartUpdate"]) runAction(name);
+  runAction("setCheckUpdatesOnStartup", false);
+  assert.deepEqual(emitted, [state.checkForUpdatesMenuEvent, state.updateDownloadRequestEvent, state.updateRestartRequestEvent]);
+  assert.equal(state.checkUpdatesOnStartup, false);
+  assert.equal(values.get(preferenceKeys.checkUpdatesOnStartup), "false");
+});
 
 test("startup info schedules one metadata check, honors opt-out, and survives denied localStorage", () => {
   for (const unavailable of [false, true]) {
