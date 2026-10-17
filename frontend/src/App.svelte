@@ -2295,12 +2295,14 @@
     align-items: center;
     justify-content: center;
     gap: 7px;
-    height: 46px;
+    height: 32px;
+    align-self: center;
+    margin-right: 6px;
     min-width: 78px;
-    padding: 0 14px;
+    padding: 0 10px;
     border: 0;
     border-left: 0;
-    border-radius: 0;
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--toolbar-foreground);
     cursor: default;
@@ -2378,7 +2380,15 @@
     cursor: default;
   }
   .linux-session-toolbar .sidebar-toggle {
-    height: 46px;
+    width: 30px;
+    height: 32px;
+    align-self: center;
+    margin: 0 5px;
+    border: 0;
+    border-radius: var(--radius-control);
+  }
+  .linux-session-toolbar .sidebar-toggle.active:not(:hover):not(:focus-visible) {
+    background: transparent;
   }
   .sidebar-toggle:hover,
   .sidebar-toggle:focus-visible,
@@ -2396,11 +2406,14 @@
     align-items: center;
     justify-content: center;
     gap: 5px;
-    height: 100%;
+    height: 30px;
+    max-height: calc(100% - 4px);
+    align-self: center;
+    margin-right: 4px;
     padding: 0 9px;
     border: 0;
     border-left: 0;
-    border-radius: 0;
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--toolbar-foreground);
     cursor: default;

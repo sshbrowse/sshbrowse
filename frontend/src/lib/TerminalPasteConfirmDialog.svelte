@@ -78,13 +78,22 @@
     box-shadow: var(--shadow-panel);
     overflow: hidden;
   }
+  dialog[open] {
+    display: flex;
+    flex-direction: column;
+  }
   dialog::backdrop {
     background: var(--overlay-backdrop);
   }
   form {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
     margin: 0;
   }
   header {
+    flex: none;
     padding: 15px 18px;
   }
   h2 {
@@ -94,7 +103,10 @@
     letter-spacing: -0.02em;
   }
   .body {
+    flex: 1 1 auto;
+    min-height: 0;
     padding: 14px 18px 16px;
+    overflow: auto;
   }
   p {
     margin: 0;
@@ -158,6 +170,7 @@
   }
   footer {
     display: flex;
+    flex: none;
     justify-content: flex-end;
     gap: 8px;
     padding: 12px 18px;

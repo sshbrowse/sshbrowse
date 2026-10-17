@@ -14,7 +14,7 @@ test("Settings shows check, download, retry, and restart controls for each updat
   // this component without a loader for Lucide's .svelte files.
   const code = compiled
     .replace(/^import BackupPanel from .*;$/gm, "const BackupPanel = () => {};")
-    .replace(/^import (ArrowLeft|Check|X) from .*;$/gm, "const $1 = () => {};")
+    .replace(/^import (\w+) from ["']@lucide\/svelte\/icons\/[^"']+["'];$/gm, "const $1 = () => {};")
     .replace('from "./customPalette"', `from ${JSON.stringify(new URL("../src/lib/customPalette.ts", import.meta.url).href)}`)
     .replace('from "./updates"', `from ${JSON.stringify(new URL("../src/lib/updates.ts", import.meta.url).href)}`)
     .replace('from "./storage"', `from ${JSON.stringify(new URL("../src/lib/storage.ts", import.meta.url).href)}`);

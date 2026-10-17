@@ -431,6 +431,7 @@
     visibility: hidden;
   }
   .tab:hover .close,
+  .tab:focus-within .close,
   .tab.active .close {
     visibility: visible;
   }
@@ -447,6 +448,9 @@
     outline-offset: -2px;
   }
   .new {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-control);
     align-self: center;
     margin-left: 2px;
     flex: none;
