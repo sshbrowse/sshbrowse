@@ -2,11 +2,14 @@ package app
 
 import (
 	"fmt"
+	"log"
 	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
+
+const EventApplicationClosing = "application:closing"
 
 // QuitGuard asks before quitting while sessions are still running. Cmd+Q and
 // closing the only window both terminate the app, so both routes come here.
@@ -15,27 +18,51 @@ type QuitGuard struct {
 	sessions  *Sessions
 	confirmed atomic.Bool
 	asking    atomic.Bool
+	closing   atomic.Bool
+	ready     atomic.Bool
+	quit      func()
 }
 
 func NewQuitGuard(wailsApp *application.App, sessions *Sessions) *QuitGuard {
-	return &QuitGuard{app: wailsApp, sessions: sessions}
+	return &QuitGuard{app: wailsApp, sessions: sessions, quit: wailsApp.Quit}
 }
 
 // ShouldQuit answers macOS's applicationShouldTerminate. It runs on the main
 // thread and cannot wait for the user, so a "no" here is followed by app.Quit
-// from the dialog's Quit button, which lands here again with confirmed set.
+// from the dialog's Quit button. Cleanup also runs off the main thread before
+// retrying Quit, so AppKit remains responsive until termination is ready.
 func (g *QuitGuard) ShouldQuit() bool {
-	if g.confirmed.Load() {
+	if g.ready.Load() {
 		return true
 	}
+	if g.closing.Load() {
+		return false
+	}
 	running := g.sessions.count()
-	if running == 0 {
-		return true
+	if g.confirmed.Load() || running == 0 {
+		g.prepareQuit()
+		return false
 	}
 	if g.asking.CompareAndSwap(false, true) {
 		go g.ask(running)
 	}
 	return false
+}
+
+func (g *QuitGuard) prepareQuit() {
+	if !g.closing.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		if g.app != nil {
+			g.app.Event.Emit(EventApplicationClosing)
+		}
+		if err := g.sessions.shutdown(); err != nil {
+			log.Printf("Close sessions before quitting: %v", err)
+		}
+		g.ready.Store(true)
+		g.quit()
+	}()
 }
 
 // confirmForRestart asks before the updater launches its helper. The helper

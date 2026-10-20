@@ -144,10 +144,14 @@ func (s *Session) Resize(cols, rows int) error {
 // its pid may belong to someone else by now.
 func (s *Session) Close() error {
 	s.stopOutput()
+	// Hang up before closing the master, while the unreaped leader still pins
+	// the group ID. Darwin can wait for queued slave output during exit; once
+	// reads stop, leaving the master open can prevent even SIGKILL from finishing.
+	_ = s.signalGroup(syscall.SIGHUP) // Exit cleanup checks the group before reaping.
+	closeErr := s.closeTerminal()
 	select {
 	case <-s.reaped:
 	default:
-		_ = s.signalGroup(syscall.SIGHUP) // Exit cleanup checks the group before reaping.
 		select {
 		case <-s.reaped:
 		case <-time.After(exitGracePeriod):
@@ -155,18 +159,16 @@ func (s *Session) Close() error {
 			select {
 			case <-s.reaped:
 			case <-time.After(finalExitTimeout):
-				_ = s.closeTerminal() // Closing the PTY is the last available way to release the process.
-				return errors.New("session: process did not exit after SIGKILL")
+				return errors.Join(closeErr, errors.New("session: process did not exit after SIGKILL"))
 			}
 		}
 	}
 	select {
 	case <-s.exited:
 	case <-time.After(finalExitTimeout):
-		_ = s.closeTerminal() // The process is gone; only a stuck output drain can remain.
-		return errors.New("session: output drain did not finish")
+		return errors.Join(closeErr, errors.New("session: output drain did not finish"))
 	}
-	return errors.Join(s.closeTerminal(), s.cleanupErr)
+	return errors.Join(closeErr, s.cleanupErr)
 }
 
 // The process is a session leader (pty sets Setsid), so its pid is also its
@@ -260,26 +262,28 @@ func (s *Session) waitForExit(onExit func(int)) {
 	// Observe exit without reaping first. The leader must retain its PID until
 	// the PTY is drained and any surviving members of its group are stopped.
 	waitErr := observeProcessExit(s.cmd.Process.Pid)
+	drainDeadline := time.Now().Add(s.drainLimit)
 	if waitErr != nil {
 		log.Printf("session: monitor process exit: %v", waitErr)
 		// The leader is still unreaped, so stop its group before losing the PID.
 		s.stopOutput()
 		_ = s.signalGroup(syscall.SIGKILL) // The monitor error already controls this path.
 		s.reap()
+	} else {
+		// ProxyCommand children can retain the slave after the leader exits.
+		// Stop them while the reader continues draining, rather than waiting
+		// through the delivery allowance before beginning child cleanup.
+		s.cleanupErr = s.stopRemainingGroup()
 	}
-	if !waitForDrain(s.readDone, s.drainLimit) {
+	if !waitForDrain(s.readDone, time.Until(drainDeadline)) {
 		s.stopOutput()
 		// A caller that ignores CancelData cannot hold session shutdown open.
 		_ = waitForDrain(s.readDone, finalExitTimeout)
-		if waitErr == nil {
-			_ = s.stopGroupAfterDrain(true) // The final group check below determines cleanupErr.
-		}
 	}
 	if err := s.closeTerminal(); err != nil {
 		log.Printf("session: close PTY after process exit: %v", err)
 	}
 	if waitErr == nil {
-		s.cleanupErr = s.stopGroupAfterDrain(false)
 		s.reap()
 	}
 	close(s.exited)

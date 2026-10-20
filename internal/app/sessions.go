@@ -53,6 +53,8 @@ type Sessions struct {
 	// starting reserves IDs and session slots while automatic logging is set up.
 	starting              map[int]*managedSession
 	shuttingDown          bool
+	shutdownDone          chan struct{}
+	shutdownErr           error // written before shutdownDone closes
 	recordingSetupSlots   chan struct{}
 	recordingSetupTimeout time.Duration
 }
@@ -263,11 +265,16 @@ func (s *Sessions) Close(id int) error {
 	return errors.Join(closeErr, loggingErr)
 }
 
-// ServiceShutdown is called by Wails when the application quits. Sessions are
-// closed in parallel so a few stuck ones cannot add up to a long quit.
+// ServiceShutdown runs on Wails's native UI thread. Only initiate cleanup here;
+// the quit guard waits for it in a goroutine before allowing native termination.
 func (s *Sessions) ServiceShutdown() error {
 	s.mu.Lock()
+	if s.shuttingDown {
+		s.mu.Unlock()
+		return nil
+	}
 	s.shuttingDown = true
+	s.shutdownDone = make(chan struct{})
 	open := make([]*managedSession, 0, len(s.sessions))
 	for _, running := range s.sessions {
 		open = append(open, running)
@@ -285,29 +292,48 @@ func (s *Sessions) ServiceShutdown() error {
 	for _, managed := range toCancel {
 		managed.logging.Cancel()
 	}
+	go func() {
+		s.shutdownErr = s.closeSessions(open)
+		close(s.shutdownDone)
+	}()
+	return nil
+}
 
-	completed := make(chan struct{}, len(open))
+// shutdown shares one bounded cleanup operation with the Wails service hook.
+// It must be called off the UI thread while the native event loop is alive.
+func (s *Sessions) shutdown() error {
+	_ = s.ServiceShutdown() // Initiation cannot fail; cleanup errors arrive below.
+	s.mu.Lock()
+	done := s.shutdownDone
+	s.mu.Unlock()
+	<-done
+	return s.shutdownErr
+}
+
+// Close in parallel so grace periods and slow recorders do not add up.
+func (s *Sessions) closeSessions(open []*managedSession) error {
+	completed := make(chan error, len(open))
 	for _, running := range open {
 		go func(running *managedSession) {
-			// Shutdown cannot recover from per-session close errors; the outer
-			// timeout still bounds quitting.
+			var closeErr error
 			if running.running != nil {
-				_ = running.running.Close()
+				closeErr = running.running.Close()
 			}
-			_, _ = running.logging.Finalize(running.logging.EndReason())
-			completed <- struct{}{}
+			completed <- errors.Join(closeErr, s.finalizeSession(running, running.logging.EndReason()))
 		}(running)
 	}
 	timer := time.NewTimer(sessionShutdownTimeout)
 	defer timer.Stop()
+	var shutdownErr error
 	for range open {
 		select {
-		case <-completed:
+		case err := <-completed:
+			shutdownErr = errors.Join(shutdownErr, err)
 		case <-timer.C:
-			return fmt.Errorf("session shutdown timed out")
+			return errors.Join(shutdownErr, fmt.Errorf("session shutdown timed out"))
 		}
 	}
-	return nil
+	return shutdownErr
 }
 
 // count is how many processes are still running, for the quit guard.

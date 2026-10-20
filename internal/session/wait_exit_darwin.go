@@ -94,23 +94,14 @@ func signalProcessGroup(pgid int, sig syscall.Signal) error {
 	if errors.Is(err, syscall.EPERM) {
 		// XNU can return EPERM while the last member is exiting, before sysctl
 		// reports it as a zombie. Confirm that transition before treating EPERM
-		// as harmless; retain the error if any live child remains in the group.
+		// as harmless, whether that member is the leader or a proxy child.
+		// Retain the error if any live member remains after the bounded check.
 		for attempt := 0; attempt < 10; attempt++ {
-			members, checkErr := unix.SysctlKinfoProcSlice("kern.proc.pgrp", pgid)
+			live, checkErr := liveGroupMembers(pgid)
 			if checkErr != nil {
 				return err
 			}
-			leaderExiting := false
-			for _, member := range members {
-				if member.Proc.P_stat == darwinZombieState {
-					continue
-				}
-				if int(member.Proc.P_pid) != pgid {
-					return err
-				}
-				leaderExiting = true
-			}
-			if !leaderExiting {
+			if !live {
 				return nil
 			}
 			time.Sleep(10 * time.Millisecond)
@@ -119,7 +110,7 @@ func signalProcessGroup(pgid int, sig syscall.Signal) error {
 	return err
 }
 
-func (s *Session) stopGroupAfterDrain(_ bool) error {
+func (s *Session) stopRemainingGroup() error {
 	live, err := liveGroupMembers(s.cmd.Process.Pid)
 	if err != nil {
 		log.Printf("session: inspect process group: %v", err)

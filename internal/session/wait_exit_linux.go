@@ -60,7 +60,9 @@ func liveGroupMembers(pgid int, deadline time.Time) (bool, error) {
 			}
 
 			stat, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "stat"))
-			if errors.Is(err, os.ErrNotExist) {
+			// /proc can report either ENOENT or ESRCH as a process disappears
+			// between ReadDir and reading stat. Neither is a scan failure.
+			if errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ESRCH) {
 				continue
 			}
 			if err != nil {
@@ -105,12 +107,8 @@ func parseLinuxProcessStat(stat []byte) (byte, int, error) {
 	return fields[0][0], processGroup, nil
 }
 
-func (s *Session) stopGroupAfterDrain(timedOut bool) error {
+func (s *Session) stopRemainingGroup() error {
 	hangupErr := s.signalGroup(syscall.SIGHUP)
-	if timedOut {
-		time.Sleep(exitGracePeriod)
-		return s.signalGroup(syscall.SIGKILL)
-	}
 	deadlineAt := time.Now().Add(exitGracePeriod)
 	deadline := time.NewTimer(exitGracePeriod)
 	defer deadline.Stop()
