@@ -14,6 +14,13 @@ export interface UpdateInfo {
   availability: "development" | "package-manager" | "supported" | "unsupported" | "unavailable";
   message: string;
 }
+export const startRecordingMenuEvent = "menu:startRecording";
+export const stopRecordingMenuEvent = "menu:stopRecording";
+export const recordingAvailabilityEvent = "menu:recordingAvailability";
+export const recordingRequestEvent = "terminal:recording-request";
+
+export type RecordingRequest = { target: string; start: boolean };
+
 export const terminalCopyMenuEvent = "menu:terminalCopy";
 export const terminalPasteMenuEvent = "menu:terminalPaste";
 export const findTerminalMenuEvent = "menu:findTerminal";
