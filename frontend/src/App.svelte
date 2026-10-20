@@ -22,6 +22,7 @@
   import QuickOpen from "./lib/QuickOpen.svelte";
   import SSHConfigImport from "./lib/SSHConfigImport.svelte";
   import CloseConfirmDialog from "./lib/CloseConfirmDialog.svelte";
+  import ClosingSessions from "./lib/ClosingSessions.svelte";
   import SettingsPage from "./lib/SettingsPage.svelte";
   import UpdateNotice from "./lib/UpdateNotice.svelte";
   import WorkspaceDialog from "./lib/WorkspaceDialog.svelte";
@@ -152,6 +153,7 @@
   const manualUpdateCheckMinimumDurationMs = 1000;
 
   let sessions = $state<AppSession[]>([]);
+  let closing = $state(false);
   let tabs = $state<Tab[]>([]);
   let activeId = $state<number | null>(null);
   let nextTabId = 1;
@@ -356,7 +358,7 @@
   }
 
   function modalDialogOpen(): boolean {
-    return workspaceDialogOpen || editing !== null || moving !== null || folderAction !== null || picking || importing !== null || closeConfirmation !== null || settingsOpen || broadcastConfirming || terminalPasteConfirmingSessionId !== null;
+    return closing || workspaceDialogOpen || editing !== null || moving !== null || folderAction !== null || picking || importing !== null || closeConfirmation !== null || settingsOpen || broadcastConfirming || terminalPasteConfirmingSessionId !== null;
   }
 
   async function loadWorkspaces() {
@@ -1405,6 +1407,10 @@
   }
 
   function onKeydown(event: KeyboardEvent) {
+    if (closing) {
+      event.preventDefault();
+      return;
+    }
     if (terminalSearchShortcutFor(event, shortcutPlatform)) {
       event.preventDefault();
       findInTerminal();
@@ -1581,6 +1587,7 @@
 
   onMount(() => {
     reloadPreferences();
+    const offClosing = Events.On("application:closing", () => { closing = true; });
 
     void loadConnections()
       .catch((error) => {
@@ -1739,6 +1746,7 @@
     window.addEventListener("keydown", onKeydown);
     window.addEventListener("blur", handleWindowBlur);
     return () => {
+      offClosing();
       offNewTab();
       offNewLocalTerminal();
       offNewSFTP();
@@ -2280,6 +2288,9 @@
     workspace={closeConfirmation.workspace}
     onclose={finishClose}
   />
+{/if}
+{#if closing}
+  <ClosingSessions />
 {/if}
 <style>
   .app {

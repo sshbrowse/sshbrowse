@@ -178,3 +178,32 @@ func linuxProcessGroup(pid int) (int, error) {
 	_, processGroup, err := parseLinuxProcessStat(data)
 	return processGroup, err
 }
+
+// Darwin can reach PTY EOF before a surviving child's HUP trap writes. This
+// assertion requires Linux's ability to read output produced after leader exit.
+func TestNaturalExitDrainsChildHangupOutput(t *testing.T) {
+	childReady := filepath.Join(t.TempDir(), "ready")
+	data := make(chan []byte, 16)
+	exited := make(chan int, 1)
+	running, slave := startDrainTestSession(t,
+		[]string{testShell(t), "-c", `(trap 'printf "CHILD_FINAL\n"; exit 0' HUP; : > "$1"; while :; do sleep 1; done) & while [ ! -e "$1" ]; do sleep 0.01; done; printf 'READY\n'; read finish; printf 'PARENT_FINAL\n'`, "sshbrowse-session-test", childReady},
+		drainTimeout, func(chunk []byte) bool {
+			data <- append([]byte(nil), chunk...)
+			return true
+		}, nil, func(code int) { exited <- code })
+	if err := slave.Close(); err != nil {
+		t.Fatal(err)
+	}
+	output := waitForOutput(t, data, "", "READY", sessionTestTimeout, nil)
+	if err := running.Write([]byte("done\n")); err != nil {
+		t.Fatal(err)
+	}
+	if code := waitForTestExit(t, exited); code != 0 {
+		t.Fatalf("parent exit code = %d, want 0", code)
+	}
+	output = waitForOutput(t, data, output, "CHILD_FINAL", sessionTestTimeout, nil)
+	if !strings.Contains(output, "PARENT_FINAL") {
+		t.Fatalf("output %q omitted the parent's final output", output)
+	}
+	assertTestSessionDrained(t, running)
+}

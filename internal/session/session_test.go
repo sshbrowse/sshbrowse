@@ -311,6 +311,114 @@ func TestCloseCancelsPendingDeliveryPromptly(t *testing.T) {
 	assertTestSessionDrained(t, running)
 }
 
+func TestCloseReleasesPTYBeforeWaitingForResistantProcess(t *testing.T) {
+	ready := make(chan struct{}, 1)
+	exited := make(chan int, 1)
+	running, err := Start(Options{
+		Argv: []string{testShell(t), "-c", `trap '' HUP; printf READY; exec sleep 30`},
+		Cols: 80, Rows: 24,
+		OnData: func([]byte) bool { ready <- struct{}{}; return true },
+		OnExit: func(code int) { exited <- code },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = running.Close() })
+	waitForTestChannel(t, ready, "resistant process readiness")
+	closed := make(chan error, 1)
+	go func() { closed <- running.Close() }()
+	deadline := time.NewTimer(time.Second)
+	defer deadline.Stop()
+	for {
+		if _, err := running.terminal.Stat(); errors.Is(err, os.ErrClosed) {
+			break
+		}
+		select {
+		case <-deadline.C:
+			t.Fatal("Close left the PTY open while waiting for the process")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(sessionTestTimeout):
+		t.Fatal("resistant process did not finish closing")
+	}
+	if code := waitForTestExit(t, exited); code != -1 {
+		t.Fatalf("resistant process exit code = %d, want -1", code)
+	}
+	assertTestSessionDrained(t, running)
+}
+
+func TestNaturalExitStopsPTYChildWithoutWaitingForDrainTimeout(t *testing.T) {
+	childReady := filepath.Join(t.TempDir(), "ready")
+	data := make(chan []byte, 16)
+	exited := make(chan int, 1)
+	running, slave := startDrainTestSession(t,
+		[]string{testShell(t), "-c", `(trap '' HUP; : > "$1"; exec sleep 30) & child=$!; while [ ! -e "$1" ]; do sleep 0.01; done; printf 'CHILD:%s\nREADY\n' "$child"; read finish; printf 'FINAL\n'`, "sshbrowse-session-test", childReady},
+		drainTimeout, func(chunk []byte) bool {
+			data <- append([]byte(nil), chunk...)
+			return true
+		}, nil, func(code int) { exited <- code })
+	if err := slave.Close(); err != nil {
+		t.Fatal(err)
+	}
+	output := waitForOutput(t, data, "", "READY", sessionTestTimeout, nil)
+	if err := running.Write([]byte("done\n")); err != nil {
+		t.Fatal(err)
+	}
+	if code := waitForTestExit(t, exited); code != 0 {
+		t.Fatalf("parent exit code = %d, want 0", code)
+	}
+	waitForOutput(t, data, output, "FINAL", sessionTestTimeout, nil)
+	assertTestSessionDrained(t, running)
+}
+
+func TestCloseStopsOpenSSHProxyCommand(t *testing.T) {
+	ssh, err := exec.LookPath("ssh")
+	if err != nil {
+		t.Skip("OpenSSH is required for the ProxyCommand regression")
+	}
+	proxy := filepath.Join(t.TempDir(), "proxy.sh")
+	if err := os.WriteFile(proxy, []byte("trap '' HUP\nprintf 'PROXY_READY\\n' >&2\nexec sleep 30\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	data := make(chan []byte, 16)
+	exited := make(chan int, 1)
+	// The proxy only sleeps. No network connection, user SSH configuration,
+	// identity or known_hosts file is used for this placeholder destination.
+	running, err := Start(Options{
+		Argv: []string{ssh, "-F", "/dev/null", "-o", "BatchMode=yes", "-o",
+			"ProxyCommand=sh '" + strings.ReplaceAll(proxy, "'", "'\\''") + "'", "--", "target.invalid"},
+		Cols: 80, Rows: 24,
+		OnData: func(chunk []byte) bool {
+			data <- append([]byte(nil), chunk...)
+			return true
+		},
+		OnExit: func(code int) { exited <- code },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = running.Close() })
+	waitForOutput(t, data, "", "PROXY_READY", sessionTestTimeout, nil)
+	closed := make(chan error, 1)
+	go func() { closed <- running.Close() }()
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("OpenSSH proxy session did not close promptly")
+	}
+	waitForTestExit(t, exited)
+	assertTestSessionDrained(t, running)
+}
+
 func testShell(t *testing.T) string {
 	t.Helper()
 	shell, err := exec.LookPath("sh")
