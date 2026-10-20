@@ -6,6 +6,7 @@ import {
   createRequestGeneration,
   dismissSessionCloseError,
   runLatestRequest,
+  recordingTargetForMenu,
 } from "../src/lib/sessionLogging.ts";
 
 function deferred<T>() {
@@ -128,4 +129,33 @@ test("session close errors stay bounded and can be dismissed", () => {
     { id: 2, message: "second" },
     { id: 4, message: "fourth" },
   ]);
+});
+
+const recordingSessions = [
+  { id: 1, loggingControl: { target: "1:11", canStart: true, canStop: false } },
+  { id: 2, loggingControl: { target: "2:22", canStart: false, canStop: true } },
+  { id: 3, loggingControl: { target: "3:33", canStart: false, canStop: false } },
+  { id: 4 },
+];
+
+test("Shell recording actions use the selected session and the requested action", () => {
+  assert.equal(recordingTargetForMenu(recordingSessions, 1, undefined, true), "1:11");
+  assert.equal(recordingTargetForMenu(recordingSessions, 2, null, false), "2:22");
+  assert.equal(recordingTargetForMenu(recordingSessions, 1, undefined, false), null);
+  assert.equal(recordingTargetForMenu(recordingSessions, 2, undefined, true), null);
+  assert.equal(recordingTargetForMenu(recordingSessions, null, undefined, true), null);
+});
+
+test("a recording context menu targets its own session regardless of selection", () => {
+  assert.equal(recordingTargetForMenu(recordingSessions, 1, "2:22", false), "2:22");
+  assert.equal(recordingTargetForMenu(recordingSessions, 2, "1:11", true), "1:11");
+  assert.equal(recordingTargetForMenu(recordingSessions, 1, "2:22", true), null);
+});
+
+test("recording menus reject stale processes, closed or busy sessions, and malformed targets", () => {
+  for (const target of ["1:10", "5:55", "3:33", "", 1, {}, ["1:11"]]) {
+    assert.equal(recordingTargetForMenu(recordingSessions, 1, target, true), null);
+    assert.equal(recordingTargetForMenu(recordingSessions, 1, target, false), null);
+  }
+  assert.equal(recordingTargetForMenu(recordingSessions, 4, undefined, true), null);
 });

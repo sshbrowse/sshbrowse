@@ -58,6 +58,8 @@
     isEditMenuAction,
     terminalCopyMenuEvent,
     terminalPasteMenuEvent,
+    recordingRequestEvent,
+    type RecordingRequest,
     type EditMenuAction,
   } from "./menuEvents";
   import type { Connection } from "../../bindings/sshbrowse/internal/profile/models";
@@ -80,7 +82,7 @@
     pasteClipboardForBroadcastGeneration,
     type LiveBroadcastPasteState,
   } from "./liveBroadcast";
-  import { canApplyLoggingResult } from "./sessionLogging";
+  import { canApplyLoggingResult, type SessionRecordingControl } from "./sessionLogging";
   import { errorMessage } from "./errors";
   import { normalizeTerminalScrollback } from "./storage";
   import {
@@ -112,6 +114,7 @@
     scrollbackLines = 1000,
     onstatus,
     onprocesschange,
+    onloggingcontrol,
     oninput,
     onfocusout,
     onfont,
@@ -144,6 +147,7 @@
     scrollbackLines?: number;
     onstatus: (status: SessionStatus) => void;
     onprocesschange: (processInstanceId: number | null) => void;
+    onloggingcontrol: (control: SessionRecordingControl) => void;
     oninput: (event: TerminalInputEvent) => void;
     onfocusout: (sessionId: number) => void;
     onfont: (command: TerminalFontCommand) => void;
@@ -525,16 +529,15 @@
     loggingActionError = "";
   }
 
-  async function toggleLogging(event: MouseEvent) {
+  async function setLogging(start: boolean) {
     const id = processInstanceId;
-    if (id === null || status !== "live" || loggingBusy) {
+    if (disposed || id === null || status !== "live" || loggingBusy) {
       return;
     }
-    // Keep keyboard activation on its button; pointer focus returns to the terminal.
-    if (event.detail > 0) {
-      terminal.focus();
+    if (start === (loggingState?.active === true)) {
+      return;
     }
-    const stopping = loggingState?.active === true;
+    const stopping = !start;
     const revision = loggingRevision;
     loggingBusy = true;
     loggingActionError = "";
@@ -885,6 +888,13 @@
     const observer = new ResizeObserver(() => fit.fit());
     observer.observe(container);
 
+    const onRecordingRequest = (event: Event) => {
+      const request = (event as CustomEvent<RecordingRequest>).detail;
+      if (shortcutsEnabled && request.target === `${sessionId}:${processInstanceId}`) {
+        void setLogging(request.start);
+      }
+    };
+    window.addEventListener(recordingRequestEvent, onRecordingRequest);
     connect(autofocus);
 
     return () => {
@@ -893,6 +903,7 @@
       offData();
       offExit();
       offLogging();
+      window.removeEventListener(recordingRequestEvent, onRecordingRequest);
       offFileDrop();
       window.removeEventListener(terminalFontEvent, onTerminalFontCommand);
       window.removeEventListener("focus", onWindowFocus);
@@ -982,7 +993,28 @@
       scheduleFit();
     }
   });
+  $effect(() => {
+    const available = status === "live" && processInstanceId !== null && !loggingBusy;
+    onloggingcontrol({
+      indicator: loggingIndicator,
+      active: loggingState?.active === true,
+      target: `${sessionId}:${processInstanceId}`,
+      canStart: available && loggingState?.active !== true,
+      canStop: available && loggingState?.active === true,
+    });
+  });
 </script>
+
+{#snippet loggingIndicator()}
+  {#if loggingState?.active}
+    <span
+      class="recording-indicator"
+      role="status"
+      aria-label={`Recording ${sessionLabel}`}
+      title={`Recording terminal output\n${loggingState.path}\nStop from Shell or the session's right-click menu.`}
+    ><span class="recording-dot" aria-hidden="true"></span><span aria-hidden="true">REC</span></span>
+  {/if}
+{/snippet}
 
 <div
   id={dropTargetId}
@@ -992,29 +1024,12 @@
   onfocusin={onfocus}
   onfocusout={() => onfocusout(sessionId)}
 >
-  {#if status === "live" || loggingState?.path || loggingState?.error || loggingActionError}
-    <div class="logging-controls" role="group" aria-label="Session logging">
-      {#if status === "live"}
-        {#if loggingState?.active}
-          <span class="recording-indicator" role="status"><span aria-hidden="true">●</span> Recording</span>
-          <button type="button" class="logging-button" disabled={loggingBusy} onclick={toggleLogging}>Stop</button>
-        {:else}
-          <button type="button" class="logging-button" disabled={loggingBusy} title="Logs can contain sensitive output, including echoed commands." onclick={toggleLogging}>
-            {loggingBusy ? "Starting…" : "Record"}
-          </button>
-        {/if}
-      {/if}
-      {#if loggingState?.path}
-        <span class="logging-path" title={loggingState.path}>{loggingState.path}</span>
-      {/if}
-      {#if loggingState?.error || loggingActionError}
-        <div class="logging-error" role="alert">
-          <span>{loggingActionError || (loggingState?.error ? `Logging failed: ${loggingState.error}` : "")}</span>
-        </div>
-      {/if}
-    </div>
-  {/if}
   <div class="terminal-area">
+    {#if loggingState?.error || loggingActionError}
+      <div class="logging-error" role="alert">
+        {loggingActionError || (loggingState?.error ? `Logging failed: ${loggingState.error}` : "")}
+      </div>
+    {/if}
     <div
       class="term"
       bind:this={container}
@@ -1103,78 +1118,35 @@
     min-width: 0;
     min-height: 0;
   }
-  .logging-controls {
-    position: relative;
-    flex: none;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 5px;
-    min-height: 34px;
-    box-sizing: border-box;
-    padding: 3px 8px;
-    pointer-events: none;
-  }
-  .logging-controls > * {
-    pointer-events: auto;
-  }
-  .logging-path {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-secondary);
-    font: var(--ui-font-small) var(--font-ui);
-  }
-  .recording-indicator,
-  .logging-button,
-  .logging-error {
+  .recording-indicator {
     display: inline-flex;
+    flex: none;
     align-items: center;
-    gap: 6px;
-    min-height: 26px;
+    gap: 4px;
+    color: var(--status-error);
+    font: 600 var(--ui-font-tiny) var(--font-ui);
+    white-space: nowrap;
+  }
+  .recording-dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .logging-error {
+    position: absolute;
+    z-index: 2;
+    top: 8px;
+    right: 8px;
+    max-width: min(520px, calc(100% - 16px));
     box-sizing: border-box;
     padding: 4px 8px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--status-error);
     border-radius: var(--radius-control);
-    background: var(--surface-raised);
-    color: var(--text-secondary);
-    font: var(--ui-font-small) var(--font-ui);
-    box-shadow: var(--shadow-panel);
-  }
-  .recording-indicator span {
-    color: var(--status-error);
-  }
-  .logging-button {
-    flex-shrink: 0;
-    cursor: default;
-    white-space: nowrap;
-  }
-  .logging-button:hover:not(:disabled) {
-    background: var(--control-hover);
-    color: var(--text-primary);
-  }
-  .logging-button:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--focus-ring);
-  }
-  .logging-button:disabled {
-    cursor: wait;
-    opacity: 0.6;
-  }
-  .logging-error {
-    min-width: 0;
-    border-color: var(--status-error);
     background: var(--status-error-surface);
     color: var(--status-error);
-    max-width: min(520px, 100%);
-    overflow-wrap: anywhere;
-  }
-  .logging-error span {
-    flex: 1 1 auto;
-    min-width: 0;
+    font: var(--ui-font-small) var(--font-ui);
     overflow-wrap: anywhere;
   }
   .term :global(.xterm) {

@@ -18,7 +18,15 @@ func TestLinuxAndWindowsUseFrontendMenuAndRegisterContextMenus(t *testing.T) {
 		t.Fatal("Linux and Windows should render the application menu in Svelte")
 	}
 
-	for _, name := range []string{"saved-connection", "saved-folder", "saved-folder-empty", "saved-sidebar", "terminal"} {
+	for _, name := range []string{
+		"saved-connection",
+		"saved-folder",
+		"saved-folder-empty",
+		"saved-sidebar",
+		"terminal",
+		"session-recording-start",
+		"session-recording-stop",
+	} {
 		if _, ok := wailsApp.ContextMenu.Get(name); !ok {
 			t.Fatalf("context menu %q is not registered", name)
 		}
@@ -110,5 +118,77 @@ func TestMacOSKeepsNativeEditRolesAndAddsSettings(t *testing.T) {
 	}
 	if find.GetAccelerator() != findShortcut {
 		t.Fatalf("Find shortcut = %q, want %q", find.GetAccelerator(), findShortcut)
+	}
+
+	shellItem := menu.FindByLabel("Shell")
+	if shellItem == nil || shellItem.GetSubmenu() == nil {
+		t.Fatal("macOS native menu is missing Shell")
+	}
+	shell := shellItem.GetSubmenu()
+	startRecording := shell.FindByLabel("Start Recording")
+	stopRecording := shell.FindByLabel("Stop Recording")
+	closeTab := shell.FindByLabel("Close Tab")
+	if startRecording == nil || stopRecording == nil || closeTab == nil {
+		t.Fatal("Shell menu is missing recording actions or Close Tab")
+	}
+	if startRecording.Enabled() || stopRecording.Enabled() {
+		t.Fatal("recording menu actions should initially be disabled")
+	}
+	startIndex, stopIndex, closeIndex := -1, -1, -1
+	for i := 0; ; i++ {
+		item := shell.ItemAt(i)
+		if item == nil {
+			break
+		}
+		switch item.Label() {
+		case "Start Recording":
+			startIndex = i
+		case "Stop Recording":
+			stopIndex = i
+		case "Close Tab":
+			closeIndex = i
+		}
+	}
+	if !(startIndex >= 0 && startIndex < stopIndex && stopIndex < closeIndex) {
+		t.Fatalf("Shell menu order = Start %d, Stop %d, Close %d; want Start < Stop < Close", startIndex, stopIndex, closeIndex)
+	}
+	if EventMenuStartRecording != "menu:startRecording" || EventMenuStopRecording != "menu:stopRecording" {
+		t.Fatal("recording menu action event names changed")
+	}
+	if !setRecordingMenuAvailability(startRecording, stopRecording, map[string]any{
+		"canStart": true,
+		"canStop":  false,
+	}) {
+		t.Fatal("valid recording availability payload was rejected")
+	}
+	if !startRecording.Enabled() || stopRecording.Enabled() {
+		t.Fatal("recording menu availability did not update menu item states")
+	}
+	if setRecordingMenuAvailability(startRecording, stopRecording, map[string]any{"canStart": false}) {
+		t.Fatal("incomplete recording availability payload was accepted")
+	}
+	if !startRecording.Enabled() || stopRecording.Enabled() {
+		t.Fatal("invalid availability payload changed menu item states")
+	}
+}
+
+func TestRecordingContextMenusHaveOneActionEach(t *testing.T) {
+	wailsApp := application.New(application.Options{Name: "SSHBrowse"})
+	registerContextMenus(wailsApp)
+
+	for _, test := range []struct {
+		name  string
+		label string
+	}{
+		{name: "session-recording-start", label: "Start Recording"},
+		{name: "session-recording-stop", label: "Stop Recording"},
+	} {
+		menu, ok := wailsApp.ContextMenu.Get(test.name)
+		if !ok {
+			t.Fatalf("recording context menu %q is not registered", test.name)
+		}
+		if menu.ItemAt(0) == nil || menu.ItemAt(0).Label() != test.label || menu.ItemAt(1) != nil {
+			t.Fatalf("context menu %q should contain only %q", test.name, test.label)
+		}
 	}
 }

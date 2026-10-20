@@ -10,6 +10,7 @@
     shortcut?: string;
     separator?: boolean;
     run?: () => void;
+    disabled?: boolean;
   };
 
   let {
@@ -33,6 +34,10 @@
     onworkspaces,
     onimport,
     onclosetab,
+    recordingCanStart,
+    recordingCanStop,
+    onstartrecording,
+    onstoprecording,
     onfont,
     oneditaction,
     onfindterminal,
@@ -67,6 +72,10 @@
     onworkspaces: () => void;
     onimport: () => void;
     onclosetab: () => void;
+    recordingCanStart: boolean;
+    recordingCanStop: boolean;
+    onstartrecording: () => void;
+    onstoprecording: () => void;
     onfont: (command: TerminalFontCommand) => void;
     oneditaction: (action: EditMenuAction) => void;
     onfindterminal: () => void;
@@ -121,6 +130,9 @@
           { label: "Import from SSH Config…", run: onimport },
           { separator: true },
           { label: "Workspaces…", run: onworkspaces },
+          { separator: true },
+          { label: "Start Recording", disabled: !recordingCanStart, run: onstartrecording },
+          { label: "Stop Recording", disabled: !recordingCanStop, run: onstoprecording },
           { separator: true },
           { label: "Close Tab", shortcut: closeTabShortcut, run: onclosetab },
         ];
@@ -404,6 +416,7 @@
                   class="menu-entry"
                   type="button"
                   role="menuitem"
+                  disabled={entry.disabled}
                   onclick={() => activate(entry)}
                 >
                   <span>{entry.label}</span>
@@ -535,7 +548,11 @@
     text-align: left;
     white-space: nowrap;
   }
-  .menu-entry:hover,
+  .menu-entry:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .menu-entry:hover:not(:disabled),
   .menu-entry:focus-visible {
     background: var(--control-hover);
   }

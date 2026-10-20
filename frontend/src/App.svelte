@@ -57,6 +57,11 @@
     editMenuEvent,
     findTerminalMenuEvent,
     terminalSearchMenuEvent,
+    startRecordingMenuEvent,
+    stopRecordingMenuEvent,
+    recordingAvailabilityEvent,
+    recordingRequestEvent,
+    type RecordingRequest,
     isEditMenuAction,
     updateDownloadRequestEvent,
     updateInfoEvent,
@@ -102,6 +107,8 @@
   import { errorMessage } from "./lib/errors";
   import {
     appendSessionCloseError,
+    recordingTargetForMenu,
+    type SessionRecordingControl,
     createRequestGeneration,
     dismissSessionCloseError,
     runLatestRequest,
@@ -139,7 +146,7 @@
     type WorkspaceState,
   } from "./lib/workspace";
 
-  type AppSession = Session & { autofocus: boolean };
+  type AppSession = Session & { autofocus: boolean; loggingControl?: SessionRecordingControl };
   type TerminalPaneComponent = typeof import("./lib/TerminalPane.svelte")["default"];
 
   const manualUpdateCheckMinimumDurationMs = 1000;
@@ -159,6 +166,38 @@
   let activeWorkspace = $derived(activeTab?.kind === "workspace" ? activeTab : null);
   let activeTileGrid = $derived(activeWorkspace ? tileGrid(activeWorkspace.sessionIds.length) : null);
   let displayLabels = $derived(sessionDisplayLabels(sessions));
+  let recordingSession = $derived(sessions.find((session) => session.id === focusedSessionId(tabs, activeId)));
+  let recordingCanStart = $derived(!modalDialogOpen() && recordingSession?.loggingControl?.canStart === true);
+  let recordingCanStop = $derived(!modalDialogOpen() && recordingSession?.loggingControl?.canStop === true);
+
+  function sessionIsRecording(sessionId: number): boolean {
+    return sessions.some((session) => session.id === sessionId && session.loggingControl?.active);
+  }
+
+  function sessionRecordingMenu(sessionId: number): { name: string; target: string } | null {
+    if (modalDialogOpen()) return null;
+    const control = sessions.find((session) => session.id === sessionId)?.loggingControl;
+    if (!control || (!control.canStart && !control.canStop)) return null;
+    return {
+      name: control.canStop ? "session-recording-stop" : "session-recording-start",
+      target: control.target,
+    };
+  }
+
+  function requestRecording(start: boolean, menuData?: unknown) {
+    if (modalDialogOpen()) return;
+    const target = recordingTargetForMenu(sessions, focusedSessionId(tabs, activeId), menuData, start);
+    if (target !== null) {
+      window.dispatchEvent(new CustomEvent<RecordingRequest>(recordingRequestEvent, { detail: { target, start } }));
+    }
+  }
+
+  $effect(() => {
+    if (currentPlatform() === "mac") {
+      Events.Emit(recordingAvailabilityEvent, { canStart: recordingCanStart, canStop: recordingCanStop })
+        .catch((error) => console.error("Could not update recording menu", error));
+    }
+  });
 
   // At most one modal dialog at a time. The menu handlers below enforce that.
   let editing = $state<{ connection: Connection; mode: ConnectionFormMode } | null>(null);
@@ -1566,6 +1605,8 @@
       openSSHConfigImport();
     });
     const offWorkspaces = Events.On("menu:workspaces", () => openWorkspaces());
+    const offStartRecording = Events.On(startRecordingMenuEvent, (event: { data?: unknown }) => requestRecording(true, event.data));
+    const offStopRecording = Events.On(stopRecordingMenuEvent, (event: { data?: unknown }) => requestRecording(false, event.data));
     const offCloseTab = Events.On("menu:closeTab", handleMenuCloseTab);
     const offFontIncrease = Events.On("menu:fontIncrease", () => onTerminalFontCommand("increase"));
     const offFontDecrease = Events.On("menu:fontDecrease", () => onTerminalFontCommand("decrease"));
@@ -1705,6 +1746,8 @@
       offImportSSHConfig();
       offWorkspaces();
       offCloseTab();
+      offStartRecording();
+      offStopRecording();
       offFontIncrease();
       offFontDecrease();
       offFontReset();
@@ -1729,6 +1772,11 @@
     };
   });
 </script>
+
+{#snippet sessionLoggingControl(sessionId: number)}
+  {@const control = sessions.find((session) => session.id === sessionId)?.loggingControl}
+  {#if control}{@render control.indicator()}{/if}
+{/snippet}
 
 <div
   class="app"
@@ -1760,6 +1808,10 @@
       onworkspaces={() => openWorkspaces()}
       onimport={() => openSSHConfigImport()}
       onclosetab={handleMenuCloseTab}
+      {recordingCanStart}
+      {recordingCanStop}
+      onstartrecording={() => requestRecording(true)}
+      onstoprecording={() => requestRecording(false)}
       onfont={onTerminalFontCommand}
       oneditaction={emitEditMenuAction}
       onfindterminal={() => findInTerminal()}
@@ -1826,6 +1878,9 @@
             {activeId}
             {newTabShortcut}
             {tilingMode}
+            recordingIndicator={sessionLoggingControl}
+            recordingMenu={sessionRecordingMenu}
+            isRecording={sessionIsRecording}
             onselect={(id) => (activeId = id)}
             onclose={(id) => requestClose({ kind: "tab", id })}
             onbookmark={bookmark}
@@ -1881,6 +1936,9 @@
         {activeId}
         {newTabShortcut}
         {tilingMode}
+        recordingIndicator={sessionLoggingControl}
+        recordingMenu={sessionRecordingMenu}
+        isRecording={sessionIsRecording}
         onselect={(id) => (activeId = id)}
         onclose={(id) => requestClose({ kind: "tab", id })}
         onbookmark={bookmark}
@@ -1977,9 +2035,18 @@
           style:grid-row={placement?.row}
         >
           {#if tiled}
-            <div class="tile-header">
+            {@const recordingMenu = sessionRecordingMenu(session.id)}
+            <div
+              class="tile-header"
+              role="group"
+              aria-label={`${sessionDisplayLabel(displayLabels, session.id)} session controls`}
+              style:--custom-contextmenu={recordingMenu?.name}
+              style:--custom-contextmenu-data={recordingMenu?.target}
+              oncontextmenu={(event) => { if (!recordingMenu) event.preventDefault(); }}
+            >
               <button
                 class="tile-select"
+                title={sessionDisplayLabel(displayLabels, session.id)}
                 onpointerdown={(event) => event.preventDefault()}
                 aria-label={`Select ${sessionDisplayLabel(displayLabels, session.id)}, ${sessionStatusLabel(session.status)}`}
                 onclick={() => selectSession(session.id)}
@@ -1997,6 +2064,7 @@
                   class:closed={session.status === "closed"}
                 >{sessionStatusLabel(session.status)}</span>
               </button>
+              {@render sessionLoggingControl(session.id)}
               {#if session.connection?.id === ""}
                 <button
                   aria-label={`Save ${session.connection.name}`}
@@ -2060,6 +2128,7 @@
               }}
               onstatus={(status) => (session.status = status)}
               onprocesschange={(processInstanceId) => (session.processInstanceId = processInstanceId)}
+              onloggingcontrol={(control) => (session.loggingControl = control)}
               oninput={routeTerminalInput}
               onfocusout={handleTerminalFocusOut}
               onfont={onTerminalFontCommand}
@@ -2504,6 +2573,7 @@
     visibility: visible;
   }
   .session-frame.tiled {
+    container: terminal-session / inline-size;
     position: relative;
     inset: auto;
   }
@@ -2511,6 +2581,8 @@
     z-index: 1;
   }
   .tile-header {
+    overflow-x: auto;
+    scrollbar-width: none;
     display: flex;
     align-items: center;
     gap: 7px;
@@ -2561,6 +2633,7 @@
     width: auto;
     min-width: 0;
     padding: 0 3px 0 0;
+    overflow: hidden;
     color: inherit;
     font: inherit;
     text-align: left;
@@ -2572,10 +2645,12 @@
     white-space: nowrap;
   }
   .tile-state {
+    flex: none;
     color: var(--text-muted);
     font-size: var(--ui-font-tiny);
   }
   .tile-header button {
+    flex: none;
     display: grid;
     place-items: center;
     width: 21px;
@@ -2593,6 +2668,15 @@
   .tile-header:focus-within > button:not(.tile-select),
   .session-frame.tiled.selected .tile-header > button:not(.tile-select) {
     opacity: 1;
+  }
+  @container terminal-session (max-width: 240px) {
+    .tile-header {
+      gap: 4px;
+      padding-left: 4px;
+    }
+    .tile-state {
+      display: none;
+    }
   }
   .tile-header button:hover {
     background: var(--control-hover);

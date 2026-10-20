@@ -1,3 +1,5 @@
+import type { Snippet } from "svelte";
+
 export type RequestGeneration = {
   next(): number;
   invalidate(): number;
@@ -74,4 +76,29 @@ export function canApplyLoggingResult(
   currentRevision: number,
 ): boolean {
   return resultId === processInstanceId && requestRevision === currentRevision;
+}
+
+export type SessionRecordingMenuState = {
+  target: string;
+  canStart: boolean;
+  canStop: boolean;
+};
+
+export type SessionRecordingControl = SessionRecordingMenuState & { active: boolean; indicator: Snippet };
+
+// Context menus pin a process generation; Shell actions use the selected session.
+// A stale menu must never redirect an action to a restarted or different session.
+export function recordingTargetForMenu(
+  sessions: readonly { id: number; loggingControl?: SessionRecordingMenuState }[],
+  selectedSessionId: number | null,
+  menuData: unknown,
+  start: boolean,
+): string | null {
+  const session = menuData === undefined || menuData === null
+    ? sessions.find((session) => session.id === selectedSessionId)
+    : typeof menuData === "string"
+      ? sessions.find((session) => session.loggingControl?.target === menuData)
+      : undefined;
+  const control = session?.loggingControl;
+  return control && (start ? control.canStart : control.canStop) ? control.target : null;
 }

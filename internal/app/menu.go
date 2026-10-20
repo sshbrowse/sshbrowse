@@ -12,6 +12,8 @@ const (
 	EventMenuNewConnection       = "menu:newConnection"
 	EventMenuImportSSHConfig     = "menu:importSSHConfig"
 	EventMenuWorkspaces          = "menu:workspaces"
+	EventMenuStartRecording      = "menu:startRecording"
+	EventMenuStopRecording       = "menu:stopRecording"
 	EventMenuCloseTab            = "menu:closeTab"
 	EventMenuFontIncrease        = "menu:fontIncrease"
 	EventMenuFontDecrease        = "menu:fontDecrease"
@@ -110,8 +112,24 @@ func buildNativeMenu(wailsApp *application.App, checkForUpdates func()) *applica
 		wailsApp.Event.Emit(EventMenuWorkspaces)
 	})
 	shell.AddSeparator()
+	startRecording := shell.Add("Start Recording").SetEnabled(false).OnClick(func(*application.Context) {
+		wailsApp.Event.Emit(EventMenuStartRecording)
+	})
+	stopRecording := shell.Add("Stop Recording").SetEnabled(false).OnClick(func(*application.Context) {
+		wailsApp.Event.Emit(EventMenuStopRecording)
+	})
+	shell.AddSeparator()
 	shell.Add("Close Tab").SetAccelerator("CmdOrCtrl+w").OnClick(func(*application.Context) {
 		wailsApp.Event.Emit(EventMenuCloseTab)
+	})
+	wailsApp.Event.On("menu:recordingAvailability", func(event *application.CustomEvent) {
+		if event == nil {
+			return
+		}
+		data := event.Data
+		application.InvokeAsync(func() {
+			setRecordingMenuAvailability(startRecording, stopRecording, data)
+		})
 	})
 
 	// Keep AppKit's standard editing roles for native text fields and menus.
@@ -185,4 +203,31 @@ func registerContextMenus(wailsApp *application.App) {
 		wailsApp.Event.Emit(EventMenuTerminalSearch, context.ContextMenuData())
 	})
 	wailsApp.ContextMenu.Add("terminal", terminalMenu)
+
+	startRecordingMenu := wailsApp.ContextMenu.New()
+	startRecordingMenu.Add("Start Recording").OnClick(func(context *application.Context) {
+		wailsApp.Event.Emit(EventMenuStartRecording, context.ContextMenuData())
+	})
+	wailsApp.ContextMenu.Add("session-recording-start", startRecordingMenu)
+
+	stopRecordingMenu := wailsApp.ContextMenu.New()
+	stopRecordingMenu.Add("Stop Recording").OnClick(func(context *application.Context) {
+		wailsApp.Event.Emit(EventMenuStopRecording, context.ContextMenuData())
+	})
+	wailsApp.ContextMenu.Add("session-recording-stop", stopRecordingMenu)
+}
+
+func setRecordingMenuAvailability(startItem, stopItem *application.MenuItem, data any) bool {
+	availability, ok := data.(map[string]any)
+	if !ok {
+		return false
+	}
+	canStart, startOK := availability["canStart"].(bool)
+	canStop, stopOK := availability["canStop"].(bool)
+	if !startOK || !stopOK {
+		return false
+	}
+	startItem.SetEnabled(canStart)
+	stopItem.SetEnabled(canStop)
+	return true
 }

@@ -25,9 +25,12 @@ Your system's OpenSSH handles authentication, host keys, and SSH configuration.
 
 ## Session logging
 
-Use **Record** in an SSH, SFTP, or local terminal pane to save new output as text.
-**Stop** ends the recording. The pane shows the file path. Enable **Log terminal
-output automatically** on a saved connection to record from startup.
+Use **Shell > Start Recording** to save new output from the selected SSH, SFTP,
+or local terminal session as text. **Shell > Stop Recording** ends it. You can
+also right-click a session tab or tile header for these actions. A red **REC**
+indicator appears only while recording; hover over it for the file path.
+Enable **Log terminal output automatically** on a saved connection to record
+from startup. Automatic recordings use the same indicator and Stop action.
 
 Recordings default to
 `~/SSHBrowse/logs/YYYY-MM-DD/hostname-YYYY-MM-DD_HH-MM-SS.txt`, using the local

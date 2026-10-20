@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, type Snippet } from "svelte";
   import Bookmark from "@lucide/svelte/icons/bookmark";
   import Plus from "@lucide/svelte/icons/plus";
   import X from "@lucide/svelte/icons/x";
@@ -12,6 +12,9 @@
     activeId,
     newTabShortcut,
     tilingMode,
+    recordingIndicator,
+    recordingMenu,
+    isRecording,
     onselect,
     onclose,
     onbookmark,
@@ -24,6 +27,9 @@
     activeId: number | null;
     newTabShortcut: string;
     tilingMode: boolean;
+    recordingIndicator: Snippet<[number]>;
+    recordingMenu: (sessionId: number) => { name: string; target: string } | null;
+    isRecording: (sessionId: number) => boolean;
     onselect: (id: number) => void;
     onclose: (id: number) => void;
     onbookmark: (id: number) => void;
@@ -64,10 +70,9 @@
   }
 
   function accessibleTitleFor(tab: Tab): string {
-    if (tab.kind === "session") {
-      return titleFor(tab);
-    }
-    return `${titleFor(tab)}: ${memberLabelsFor(tab).join(" · ")}`;
+    const title = tab.kind === "session" ? titleFor(tab) : `${titleFor(tab)}: ${memberLabelsFor(tab).join(" · ")}`;
+    const ids = tab.kind === "session" ? [tab.sessionId] : tab.sessionIds;
+    return ids.some(isRecording) ? `${title} — Recording` : title;
   }
 
   function statusFor(tab: Tab): SessionStatus {
@@ -201,6 +206,7 @@
 <div bind:this={tabbar} class="tabbar" role="tablist">
   {#each tabs as tab (tab.id)}
     {@const status = statusFor(tab)}
+    {@const menu = tab.kind === "session" ? recordingMenu(tab.sessionId) : null}
     <div
       class="tab"
       class:active={tab.id === activeId}
@@ -212,6 +218,9 @@
       class:drop-full={tab.id === dropTargetId && dropState === "full"}
       role="tab"
       data-tab-id={tab.id}
+      style:--custom-contextmenu={menu?.name}
+      style:--custom-contextmenu-data={menu?.target}
+      oncontextmenu={(event) => { if (!menu) event.preventDefault(); }}
       tabindex={tab.id === activeId ? 0 : -1}
       aria-selected={tab.id === activeId}
       aria-label={`${accessibleTitleFor(tab)} — ${statusLabel(status)}`}
@@ -233,6 +242,9 @@
       ></span>
       <span class="title">{titleFor(tab)}</span>
       <span class="state-label">{statusLabel(status)}</span>
+      {#if tab.kind === "session"}
+        {@render recordingIndicator(tab.sessionId)}
+      {/if}
       {#if tab.kind === "workspace"}
         <span class="count" aria-label={`${tab.sessionIds.length} sessions`}>{tab.sessionIds.length}</span>
       {/if}
@@ -298,7 +310,7 @@
     gap: 7px;
     height: calc(var(--window-header-height, 40px) - 4px);
     padding: 0 5px 0 9px;
-    min-width: 112px;
+    min-width: 140px;
     max-width: 220px;
     border: 1px solid transparent;
     border-radius: var(--radius-control) var(--radius-control) 0 0;
@@ -307,6 +319,10 @@
   .tab:not(.workspace) {
     cursor: grab;
     touch-action: none;
+  }
+  .tab:has(.bookmark) {
+    /* Keep Save and Close inside a recording tab when its title shrinks. */
+    min-width: 180px;
   }
   .tab.workspace {
     min-width: 150px;
@@ -355,6 +371,7 @@
   }
   .title {
     flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
