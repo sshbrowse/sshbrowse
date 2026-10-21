@@ -14,6 +14,8 @@ const (
 	EventMenuWorkspaces          = "menu:workspaces"
 	EventMenuStartRecording      = "menu:startRecording"
 	EventMenuStopRecording       = "menu:stopRecording"
+	EventMenuDetachSession       = "menu:detachSession"
+	EventMenuCloseSession        = "menu:closeSession"
 	EventMenuCloseTab            = "menu:closeTab"
 	EventMenuFontIncrease        = "menu:fontIncrease"
 	EventMenuFontDecrease        = "menu:fontDecrease"
@@ -112,10 +114,10 @@ func buildNativeMenu(wailsApp *application.App, checkForUpdates func()) *applica
 		wailsApp.Event.Emit(EventMenuWorkspaces)
 	})
 	shell.AddSeparator()
-	startRecording := shell.Add("Start Recording").SetEnabled(false).OnClick(func(*application.Context) {
+	startRecording := shell.Add("Start session log").SetEnabled(false).OnClick(func(*application.Context) {
 		wailsApp.Event.Emit(EventMenuStartRecording)
 	})
-	stopRecording := shell.Add("Stop Recording").SetEnabled(false).OnClick(func(*application.Context) {
+	stopRecording := shell.Add("Stop session log").SetEnabled(false).OnClick(func(*application.Context) {
 		wailsApp.Event.Emit(EventMenuStopRecording)
 	})
 	shell.AddSeparator()
@@ -204,17 +206,32 @@ func registerContextMenus(wailsApp *application.App) {
 	})
 	wailsApp.ContextMenu.Add("terminal", terminalMenu)
 
-	startRecordingMenu := wailsApp.ContextMenu.New()
-	startRecordingMenu.Add("Start Recording").OnClick(func(context *application.Context) {
-		wailsApp.Event.Emit(EventMenuStartRecording, context.ContextMenuData())
-	})
-	wailsApp.ContextMenu.Add("session-recording-start", startRecordingMenu)
-
-	stopRecordingMenu := wailsApp.ContextMenu.New()
-	stopRecordingMenu.Add("Stop Recording").OnClick(func(context *application.Context) {
-		wailsApp.Event.Emit(EventMenuStopRecording, context.ContextMenuData())
-	})
-	wailsApp.ContextMenu.Add("session-recording-stop", stopRecordingMenu)
+	for _, kind := range []string{"tab", "tile"} {
+		for _, loggingAction := range []string{"start", "stop", "idle"} {
+			menu := wailsApp.ContextMenu.New()
+			switch loggingAction {
+			case "start":
+				menu.Add("Start session log").OnClick(func(context *application.Context) {
+					wailsApp.Event.Emit(EventMenuStartRecording, context.ContextMenuData())
+				})
+				menu.AddSeparator()
+			case "stop":
+				menu.Add("Stop session log").OnClick(func(context *application.Context) {
+					wailsApp.Event.Emit(EventMenuStopRecording, context.ContextMenuData())
+				})
+				menu.AddSeparator()
+			}
+			if kind == "tile" {
+				menu.Add("Move to own tab").OnClick(func(context *application.Context) {
+					wailsApp.Event.Emit(EventMenuDetachSession, context.ContextMenuData())
+				})
+			}
+			menu.Add("Close").OnClick(func(context *application.Context) {
+				wailsApp.Event.Emit(EventMenuCloseSession, context.ContextMenuData())
+			})
+			wailsApp.ContextMenu.Add("session-"+kind+"-"+loggingAction, menu)
+		}
+	}
 }
 
 func setRecordingMenuAvailability(startItem, stopItem *application.MenuItem, data any) bool {

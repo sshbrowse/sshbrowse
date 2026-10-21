@@ -16,6 +16,8 @@ export interface UpdateInfo {
 }
 export const startRecordingMenuEvent = "menu:startRecording";
 export const stopRecordingMenuEvent = "menu:stopRecording";
+export const detachSessionMenuEvent = "menu:detachSession";
+export const closeSessionMenuEvent = "menu:closeSession";
 export const recordingAvailabilityEvent = "menu:recordingAvailability";
 export const recordingRequestEvent = "terminal:recording-request";
 

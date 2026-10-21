@@ -60,6 +60,8 @@
     terminalSearchMenuEvent,
     startRecordingMenuEvent,
     stopRecordingMenuEvent,
+    detachSessionMenuEvent,
+    closeSessionMenuEvent,
     recordingAvailabilityEvent,
     recordingRequestEvent,
     type RecordingRequest,
@@ -106,6 +108,7 @@
   import { scanSSHConfig, type SSHConfigScan } from "./lib/sshconfig";
   import { tileGrid } from "./lib/tileLayout";
   import { errorMessage } from "./lib/errors";
+  import { sessionContextMenu, sessionForContextMenu } from "./lib/sessionMenu";
   import {
     appendSessionCloseError,
     recordingTargetForMenu,
@@ -176,14 +179,18 @@
     return sessions.some((session) => session.id === sessionId && session.loggingControl?.active);
   }
 
-  function sessionRecordingMenu(sessionId: number): { name: string; target: string } | null {
+  function sessionMenu(sessionId: number, tiled = false): { name: string; target: string } | null {
     if (modalDialogOpen()) return null;
-    const control = sessions.find((session) => session.id === sessionId)?.loggingControl;
-    if (!control || (!control.canStart && !control.canStop)) return null;
-    return {
-      name: control.canStop ? "session-recording-stop" : "session-recording-start",
-      target: control.target,
-    };
+    const session = sessions.find((session) => session.id === sessionId);
+    return session ? sessionContextMenu(session, tiled) : null;
+  }
+
+  function handleSessionMenuAction(menuData: unknown, action: "detach" | "close") {
+    if (modalDialogOpen()) return;
+    const session = sessionForContextMenu(sessions, menuData);
+    if (!session) return;
+    if (action === "detach") detachSession(session.id);
+    else requestClose({ kind: "session", id: session.id });
   }
 
   function requestRecording(start: boolean, menuData?: unknown) {
@@ -713,11 +720,11 @@
         onSuccess: (settings) => {
           if (settings !== null) {
             loggingSettings = settings;
-            loggingSettingsStatus = "Recording folder saved.";
+            loggingSettingsStatus = "Log folder saved.";
           }
         },
         onError: (error) => {
-          loggingSettingsError = `Could not change the recording folder: ${errorMessage(error)}`;
+          loggingSettingsError = `Could not change the log folder: ${errorMessage(error)}`;
         },
         onFinally: () => {
           loggingSettingsBusy = false;
@@ -1614,6 +1621,8 @@
     const offWorkspaces = Events.On("menu:workspaces", () => openWorkspaces());
     const offStartRecording = Events.On(startRecordingMenuEvent, (event: { data?: unknown }) => requestRecording(true, event.data));
     const offStopRecording = Events.On(stopRecordingMenuEvent, (event: { data?: unknown }) => requestRecording(false, event.data));
+    const offDetachSession = Events.On(detachSessionMenuEvent, (event: { data?: unknown }) => handleSessionMenuAction(event.data, "detach"));
+    const offCloseSession = Events.On(closeSessionMenuEvent, (event: { data?: unknown }) => handleSessionMenuAction(event.data, "close"));
     const offCloseTab = Events.On("menu:closeTab", handleMenuCloseTab);
     const offFontIncrease = Events.On("menu:fontIncrease", () => onTerminalFontCommand("increase"));
     const offFontDecrease = Events.On("menu:fontDecrease", () => onTerminalFontCommand("decrease"));
@@ -1756,6 +1765,8 @@
       offCloseTab();
       offStartRecording();
       offStopRecording();
+      offDetachSession();
+      offCloseSession();
       offFontIncrease();
       offFontDecrease();
       offFontReset();
@@ -1887,7 +1898,7 @@
             {newTabShortcut}
             {tilingMode}
             recordingIndicator={sessionLoggingControl}
-            recordingMenu={sessionRecordingMenu}
+            {sessionMenu}
             isRecording={sessionIsRecording}
             onselect={(id) => (activeId = id)}
             onclose={(id) => requestClose({ kind: "tab", id })}
@@ -1945,7 +1956,7 @@
         {newTabShortcut}
         {tilingMode}
         recordingIndicator={sessionLoggingControl}
-        recordingMenu={sessionRecordingMenu}
+        {sessionMenu}
         isRecording={sessionIsRecording}
         onselect={(id) => (activeId = id)}
         onclose={(id) => requestClose({ kind: "tab", id })}
@@ -2043,14 +2054,14 @@
           style:grid-row={placement?.row}
         >
           {#if tiled}
-            {@const recordingMenu = sessionRecordingMenu(session.id)}
+            {@const menu = sessionMenu(session.id, true)}
             <div
               class="tile-header"
               role="group"
               aria-label={`${sessionDisplayLabel(displayLabels, session.id)} session controls`}
-              style:--custom-contextmenu={recordingMenu?.name}
-              style:--custom-contextmenu-data={recordingMenu?.target}
-              oncontextmenu={(event) => { if (!recordingMenu) event.preventDefault(); }}
+              style:--custom-contextmenu={menu?.name}
+              style:--custom-contextmenu-data={menu?.target}
+              oncontextmenu={(event) => { if (!menu) event.preventDefault(); }}
             >
               <button
                 class="tile-select"

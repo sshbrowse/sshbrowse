@@ -115,14 +115,14 @@
     onclose: () => void;
   } = $props();
 
-  const themes: { name: ThemeName; label: string; description: string }[] = [
-    { name: "classic", label: "Classic Graphite", description: "Graphite · cool gray" },
-    { name: "warm", label: "Warm", description: "Charcoal · amber" },
-    { name: "moss", label: "Moss", description: "Charcoal · sage" },
-    { name: "fjord", label: "Fjord", description: "Deep blue · teal" },
-    { name: "oled", label: "OLED Black", description: "Pure black" },
-    { name: "contrast", label: "High Contrast", description: "Clear edges · bright text" },
-    { name: "custom", label: "Custom", description: "Your own palette" },
+  const themes: { name: ThemeName; label: string }[] = [
+    { name: "classic", label: "Classic Graphite" },
+    { name: "warm", label: "Warm" },
+    { name: "moss", label: "Moss" },
+    { name: "fjord", label: "Fjord" },
+    { name: "oled", label: "OLED Black" },
+    { name: "contrast", label: "High Contrast" },
+    { name: "custom", label: "Custom" },
   ];
 
   const paletteFields: { key: keyof CustomPalette; label: string }[] = [
@@ -210,19 +210,13 @@
       <button class="close" type="button" disabled={backupBusy} aria-label="Close Settings" title="Close Settings" onclick={onclose}><X size={16} /></button>
       <main bind:this={pageContent} class="page-content">
         <div class="page-inner">
-          <h1 bind:this={pageHeading} tabindex="-1">{sectionLabels[selectedSection]}</h1>
-          {#if selectedSection === "general"}
-            <p class="page-description">Updates and backups for SSHBrowse.</p>
-          {:else if selectedSection === "appearance"}
-            <p class="page-description">Make the workspace your own.</p>
-          {:else}
-            <p class="page-description">Control input, history, and session recording.</p>
-          {/if}
+          <header class="page-heading">
+            <h1 bind:this={pageHeading} tabindex="-1">{sectionLabels[selectedSection]}</h1>
+          </header>
           {#if selectedSection === "general"}
             <section aria-labelledby="updates-heading">
               <div class="section-heading">
                 <h2 id="updates-heading">Updates</h2>
-                <p>Application version and update options.</p>
               </div>
               <div class="setting-group">
                 <div class="setting-row">
@@ -243,11 +237,11 @@
                 </div>
                 {#if canCheckForUpdates(updateInfo?.availability)}
                   <div class="setting-row">
-                    <div><strong>Check for updates on startup</strong><span>Check GitHub Releases at most once a day; downloads require your approval</span></div>
+                    <div><strong>Check for updates on startup</strong></div>
                     <button class="switch" type="button" role="switch" disabled={backupBusy} aria-label="Check for updates on startup" aria-checked={checkUpdatesOnStartup} onclick={() => onstartupupdatechange(!checkUpdatesOnStartup)}><span></span></button>
                   </div>
                 {/if}
-                {#if updateInfo}
+                {#if updateInfo?.message && updateInfo.availability !== "supported"}
                   <p class="update-guidance">{updateInfo.message}</p>
                 {/if}
                 {#if updateStatus}
@@ -269,7 +263,6 @@
             <section aria-labelledby="theme-heading">
               <div class="section-heading">
                 <h2 id="theme-heading">Interface theme</h2>
-                <p>Choose the look of the workspace and controls.</p>
               </div>
               <div class="theme-grid">
                 {#each themes as theme (theme.name)}
@@ -291,7 +284,6 @@
                       </span>
                     </span>
                     <span class="card-label">{theme.label}<span class="selected-mark" aria-hidden="true">{#if themeName === theme.name}<Check size={14} />{/if}</span></span>
-                    <span class="card-description">{theme.description}</span>
                   </button>
                 {/each}
               </div>
@@ -313,18 +305,17 @@
                     </div>
                   {/each}
                 </div>
-                <p id="palette-hint" class="hint">Use six-digit hex colors. Accent is adjusted when needed for contrast. Terminal color applies when Follow interface is selected.</p>
+                <p id="palette-hint" class="hint">Six-digit hex colors. Terminal applies with Follow interface.</p>
                 <button class="update-button palette-reset" type="button" onclick={() => oncustompalettechange({ ...defaultCustomPalette })}>Reset palette</button>
               </section>
             {/if}
             <section aria-labelledby="terminal-text-heading">
               <div class="section-heading">
                 <h2 id="terminal-text-heading">Terminal display</h2>
-                <p>Set text and colors for terminal panes.</p>
               </div>
               <div class="setting-group">
                 <div class="setting-row">
-                  <div><strong>Terminal font</strong><span>Installed fonts are used; missing fonts fall back to the system monospace</span></div>
+                  <div><strong>Terminal font</strong><span>Falls back to system monospace</span></div>
                   <div class="select-control">
                     <select aria-label="Terminal font" value={terminalFontName} onchange={(event) => onterminalfontchange(event.currentTarget.value as TerminalFontName)}>
                       <option value="system">System monospace</option>
@@ -336,7 +327,7 @@
                   </div>
                 </div>
                 <div class="setting-row">
-                  <div><strong>Terminal size</strong><span>Default size for new and unadjusted panes</span></div>
+                  <div><strong>Default font size</strong></div>
                   <div class="stepper" role="group" aria-label="Terminal default font size">
                     <button type="button" aria-label="Decrease terminal default font size" disabled={terminalFontSize <= 8} onclick={() => onterminalfontsizechange(terminalFontSize - 1)}>−</button>
                     <output aria-live="polite">{terminalFontSize} px</output>
@@ -344,30 +335,28 @@
                   </div>
                 </div>
                 <div class="setting-row">
-                  <div><strong>Terminal colors</strong><span>Use the interface palette or keep a neutral black terminal</span></div>
+                  <div><strong>Terminal colors</strong></div>
                   <div class="segmented" role="group" aria-label="Terminal colors">
                     <button type="button" aria-pressed={terminalColors === "follow"} class:active={terminalColors === "follow"} onclick={() => onterminalcolorschange("follow")}>Follow interface</button>
                     <button type="button" aria-pressed={terminalColors === "neutral"} class:active={terminalColors === "neutral"} onclick={() => onterminalcolorschange("neutral")}>Neutral black</button>
                   </div>
                 </div>
               </div>
-              <p class="hint">Font shortcuts adjust the selected pane, or all Live input recipients. Reset returns each pane to this default size.</p>
             </section>
             <section aria-labelledby="type-heading">
               <div class="section-heading">
                 <h2 id="type-heading">Interface</h2>
-                <p>Set comfortable text and control sizes.</p>
               </div>
               <div class="setting-group">
                 <div class="setting-row">
-                  <div><strong>Interface text</strong><span>Labels, menus, dialogs, and controls</span></div>
+                  <div><strong>Interface text</strong></div>
                   <div class="segmented" role="group" aria-label="Interface text size">
                     <button type="button" aria-pressed={uiSize === "standard"} class:active={uiSize === "standard"} onclick={() => onuisizechange("standard")}>Standard</button>
                     <button type="button" aria-pressed={uiSize === "large"} class:active={uiSize === "large"} onclick={() => onuisizechange("large")}>Large</button>
                   </div>
                 </div>
                 <div class="setting-row">
-                  <div><strong>Interface scale</strong><span>Size of panels and controls; terminal text stays separate</span></div>
+                  <div><strong>Interface scale</strong><span>Panels and controls; excludes terminal text</span></div>
                   <div class="stepper" role="group" aria-label="Interface scale">
                     <button type="button" aria-label="Decrease interface scale" disabled={interfaceScale <= 0.8} onclick={() => oninterfacescalechange(interfaceScale - 0.1)}>−</button>
                     <output aria-live="polite">{Math.round(interfaceScale * 100)}%</output>
@@ -380,14 +369,13 @@
           {#if selectedSection === "terminal"}
             <section aria-labelledby="terminal-heading">
               <div class="section-heading">
-                <h2 id="terminal-heading">Terminal behavior</h2>
-                <p>Choose how live terminals retain output and handle input.</p>
+                <h2 id="terminal-heading">History &amp; input</h2>
               </div>
               <div class="setting-group">
                 <div class="setting-row">
                   <div>
                     <label for="terminal-scrollback-lines"><strong>Scrollback lines</strong></label>
-                    <span id="scrollback-description">Applies to all open and future terminals. Lines retained above the visible terminal. 0 disables history; maximum 50,000.</span>
+                    <span id="scrollback-description">History for all terminals. 0 disables; maximum 50,000 lines.</span>
                   </div>
                   <form class="scrollback-control" onsubmit={applyScrollback}>
                     <input
@@ -397,39 +385,38 @@
                       max={terminalScrollbackMaximum}
                       step="1"
                       required
-                      aria-describedby="scrollback-description scrollback-warning"
+                      aria-describedby="scrollback-description"
                       bind:value={scrollbackDraft}
                     />
                     <button class="update-button" type="submit" disabled={scrollbackDraft === undefined || scrollbackDraft === terminalScrollbackLines}>Apply</button>
                   </form>
                 </div>
                 <div class="setting-row">
-                  <div><strong>Copy selection automatically</strong><span>Copy highlighted terminal text to the clipboard</span></div>
+                  <div><strong>Copy selection automatically</strong></div>
                   <button class="switch" type="button" role="switch" aria-label="Copy selection automatically" aria-checked={copyOnSelection} onclick={() => oncopyselectionchange(!copyOnSelection)}><span></span></button>
                 </div>
                 <div class="setting-row">
-                  <div><strong>Right-click to paste</strong><span>Shift and right-click opens the terminal context menu</span></div>
+                  <div><strong>Right-click to paste</strong><span>Shift + right-click opens the context menu</span></div>
                   <button class="switch" type="button" role="switch" aria-label="Right-click to paste" aria-checked={rightClickToPaste} onclick={() => onrightclickpastechange(!rightClickToPaste)}><span></span></button>
                 </div>
                 <div class="setting-row">
-                  <div><strong>Warn before pasting multiple lines</strong><span>Ask for confirmation when pasted text contains line breaks</span></div>
+                  <div><strong>Warn before pasting multiple lines</strong></div>
                   <button class="switch" type="button" role="switch" aria-label="Warn before pasting multiple lines" aria-checked={!terminalPasteWarningsDisabled} onclick={() => onpastewarningschange(!terminalPasteWarningsDisabled)}><span></span></button>
                 </div>
               </div>
-              <p id="scrollback-warning" class="hint">Lowering this limit removes the oldest retained lines in every open terminal. Removed output cannot be recovered.</p>
             </section>
           {/if}
           {#if selectedSection === "terminal"}
             <section aria-labelledby="logging-heading">
               <div class="section-heading">
-                <h2 id="logging-heading">Session logging</h2>
-                <p>Record terminal output to a text file. Each recording stops at 100 MiB; the terminal keeps running.</p>
+                <h2 id="logging-heading">Session logs</h2>
+                <p>Save terminal output as text, up to 100 MiB per log.</p>
               </div>
               <div class="setting-group">
                 <div class="setting-row">
-                  <div><strong>Recording folder</strong><span>Files are grouped by day in this folder.</span></div>
+                  <div><strong>Log folder</strong><span>Organized by day</span></div>
                   <div class="directory-picker">
-                    <input aria-label="Recording folder" class="technical" value={loggingDirectory} title={loggingDirectory} readonly />
+                    <input aria-label="Log folder" class="technical" value={loggingDirectory} title={loggingDirectory} readonly />
                     <button class="update-button" type="button" disabled={loggingSettingsLoading || !loggingSettingsReady || loggingSettingsBusy} onclick={onchooseloggingdirectory}>
                       {loggingSettingsBusy ? "Saving…" : "Choose…"}
                     </button>
@@ -520,11 +507,11 @@
   .page-inner { max-width: 760px; margin: 0 auto; }
   h1 { margin: 0; font-size: var(--ui-font-title); font-weight: 500; line-height: 1.25; letter-spacing: -0.02em; }
   h1:focus { outline: none; }
-  .page-description { margin: 8px 0 28px; color: var(--text-secondary); font-size: var(--ui-font-small); }
+  .page-heading { margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border-subtle); }
   .page-inner section + section { margin-top: 32px; }
   .section-heading { margin-bottom: 16px; }
-  h2 { margin: 0 0 5px; font-size: var(--ui-font-heading); font-weight: 500; }
-  .section-heading p, .hint { margin: 0; color: var(--text-secondary); font-size: var(--ui-font-small); }
+  h2 { margin: 0; font-size: var(--ui-font-heading); font-weight: 500; }
+  .section-heading p, .hint { margin: 6px 0 0; color: var(--text-secondary); font-size: var(--ui-font-small); }
   .theme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 156px), 1fr)); gap: 10px; max-width: 760px; }
   .theme-card {
     min-width: 0;
@@ -570,7 +557,6 @@
   .preview-terminal i:nth-child(2) { width: 48%; }
   .preview-terminal i:nth-child(3) { width: 36%; opacity: .9; }
   .card-label { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 9px; font-weight: 500; }
-  .card-description { display: block; margin-top: 2px; color: var(--text-secondary); font-size: var(--ui-font-small); }
   .selected-mark { color: var(--accent); }
   .setting-group { overflow: hidden; border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface); }
   .setting-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; padding: 14px 18px; }
@@ -582,7 +568,7 @@
   .update-button { min-height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--toolbar-control); color: var(--text-primary); font: inherit; cursor: default; }
   .update-button:hover:not(:disabled) { background: var(--toolbar-control-hover); }
   .update-button:disabled { opacity: .5; }
-  .update-guidance, .update-status { margin: 0; padding: 0 16px 14px; color: var(--text-secondary); font-size: var(--ui-font-small); line-height: 1.4; }
+  .update-guidance, .update-status { margin: 0; padding: 0 18px 14px; color: var(--text-secondary); font-size: var(--ui-font-small); line-height: 1.4; }
   .update-status { color: var(--text-primary); }
   .update-status.error { color: var(--status-error); }
   .segmented, .stepper { display: flex; flex: none; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--input-surface); }

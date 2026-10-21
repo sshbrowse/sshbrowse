@@ -131,8 +131,8 @@
           { separator: true },
           { label: "Workspaces…", run: onworkspaces },
           { separator: true },
-          { label: "Start Recording", disabled: !recordingCanStart, run: onstartrecording },
-          { label: "Stop Recording", disabled: !recordingCanStop, run: onstoprecording },
+          { label: "Start session log", disabled: !recordingCanStart, run: onstartrecording },
+          { label: "Stop session log", disabled: !recordingCanStop, run: onstoprecording },
           { separator: true },
           { label: "Close Tab", shortcut: closeTabShortcut, run: onclosetab },
         ];
