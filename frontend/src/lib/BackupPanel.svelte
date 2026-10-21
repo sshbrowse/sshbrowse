@@ -170,33 +170,25 @@
 </script>
 
 <section aria-label="Backup actions">
-  <p class="intro">Move your saved connections and settings to another computer.</p>
-
   <div class="backup-card">
     <div class="backup-row">
       <div class="copy-block">
         <strong>Export backup</strong>
-        <span>Save all connections and folders to a file.</span>
+        <span>Save connections and folders to a file.</span>
         <label class="export-preferences">
-          <input type="checkbox" bind:checked={includePreferences} disabled={busy} aria-describedby="export-preferences-hint" />
+          <input type="checkbox" bind:checked={includePreferences} disabled={busy} />
           Include app settings
         </label>
-        <small id="export-preferences-hint" class="preferences-hint">Theme, terminal preferences, and interface layout.</small>
       </div>
       <button class="action" type="button" disabled={busy} onclick={exportBackup}>Export backup…</button>
     </div>
     <div class="backup-row">
       <div class="copy-block">
         <strong>Import backup</strong>
-        <span>Review a file before adding or restoring connections.</span>
+        <span>Review connections before restoring.</span>
       </div>
       <button class="action" type="button" disabled={busy} onclick={chooseImport}>{preview ? "Choose another file…" : "Import backup…"}</button>
     </div>
-  </div>
-
-  <div class="backup-details">
-    <p>SSH keys and OpenSSH configuration are not copied. Move them separately and update key paths on the new computer.</p>
-    <p>Backups contain hostnames, usernames, and local paths. Keep them private.</p>
   </div>
 
   {#if status}
@@ -304,8 +296,7 @@
 </section>
 
 <style>
-  .intro, .copy-block span, .backup-details, .status, .muted { color: var(--text-secondary); font-size: var(--ui-font-small); line-height: 1.45; }
-  .intro { margin: 0 0 24px; }
+  .copy-block span, .status, .muted { color: var(--text-secondary); font-size: var(--ui-font-small); line-height: 1.45; }
   .backup-card, .preview { border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface); }
   .backup-card { overflow: hidden; }
   .backup-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; }
@@ -313,7 +304,6 @@
   .copy-block { display: flex; flex: 1 1 280px; min-width: 0; flex-direction: column; gap: 4px; }
   .copy-block strong { font-weight: 400; }
   .export-preferences { display: flex; align-items: center; gap: 9px; min-height: 28px; margin-top: 6px; font-size: var(--ui-font-body); }
-  .preferences-hint { margin-left: 27px; color: var(--text-secondary); font-size: var(--ui-font-small); line-height: 1.4; }
   input[type="radio"] { accent-color: var(--accent); }
   input[type="checkbox"] {
     appearance: none;
@@ -337,8 +327,6 @@
     transform: translateY(-1px) rotate(45deg);
   }
   input[type="checkbox"]:disabled { opacity: .5; }
-  .backup-details { display: grid; gap: 8px; margin: 16px 0 0; }
-  .backup-details p { margin: 0; }
   .action, .quiet { min-height: 36px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--toolbar-control); color: var(--text-primary); font: inherit; cursor: default; }
   .action { flex-shrink: 0; padding: 0 12px; }
   .action:hover:not(:disabled), .quiet:hover:not(:disabled) { background: var(--toolbar-control-hover); }

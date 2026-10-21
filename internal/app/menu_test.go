@@ -24,8 +24,12 @@ func TestLinuxAndWindowsUseFrontendMenuAndRegisterContextMenus(t *testing.T) {
 		"saved-folder-empty",
 		"saved-sidebar",
 		"terminal",
-		"session-recording-start",
-		"session-recording-stop",
+		"session-tab-start",
+		"session-tab-stop",
+		"session-tab-idle",
+		"session-tile-start",
+		"session-tile-stop",
+		"session-tile-idle",
 	} {
 		if _, ok := wailsApp.ContextMenu.Get(name); !ok {
 			t.Fatalf("context menu %q is not registered", name)
@@ -125,8 +129,8 @@ func TestMacOSKeepsNativeEditRolesAndAddsSettings(t *testing.T) {
 		t.Fatal("macOS native menu is missing Shell")
 	}
 	shell := shellItem.GetSubmenu()
-	startRecording := shell.FindByLabel("Start Recording")
-	stopRecording := shell.FindByLabel("Stop Recording")
+	startRecording := shell.FindByLabel("Start session log")
+	stopRecording := shell.FindByLabel("Stop session log")
 	closeTab := shell.FindByLabel("Close Tab")
 	if startRecording == nil || stopRecording == nil || closeTab == nil {
 		t.Fatal("Shell menu is missing recording actions or Close Tab")
@@ -141,9 +145,9 @@ func TestMacOSKeepsNativeEditRolesAndAddsSettings(t *testing.T) {
 			break
 		}
 		switch item.Label() {
-		case "Start Recording":
+		case "Start session log":
 			startIndex = i
-		case "Stop Recording":
+		case "Stop session log":
 			stopIndex = i
 		case "Close Tab":
 			closeIndex = i
@@ -172,23 +176,35 @@ func TestMacOSKeepsNativeEditRolesAndAddsSettings(t *testing.T) {
 	}
 }
 
-func TestRecordingContextMenusHaveOneActionEach(t *testing.T) {
+func TestSessionContextMenusMatchAvailableActions(t *testing.T) {
 	wailsApp := application.New(application.Options{Name: "SSHBrowse"})
 	registerContextMenus(wailsApp)
 
 	for _, test := range []struct {
-		name  string
-		label string
+		name   string
+		labels []string
 	}{
-		{name: "session-recording-start", label: "Start Recording"},
-		{name: "session-recording-stop", label: "Stop Recording"},
+		{name: "session-tab-start", labels: []string{"Start session log", "", "Close"}},
+		{name: "session-tab-stop", labels: []string{"Stop session log", "", "Close"}},
+		{name: "session-tab-idle", labels: []string{"Close"}},
+		{name: "session-tile-start", labels: []string{"Start session log", "", "Move to own tab", "Close"}},
+		{name: "session-tile-stop", labels: []string{"Stop session log", "", "Move to own tab", "Close"}},
+		{name: "session-tile-idle", labels: []string{"Move to own tab", "Close"}},
 	} {
-		menu, ok := wailsApp.ContextMenu.Get(test.name)
-		if !ok {
-			t.Fatalf("recording context menu %q is not registered", test.name)
-		}
-		if menu.ItemAt(0) == nil || menu.ItemAt(0).Label() != test.label || menu.ItemAt(1) != nil {
-			t.Fatalf("context menu %q should contain only %q", test.name, test.label)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			menu, ok := wailsApp.ContextMenu.Get(test.name)
+			if !ok {
+				t.Fatalf("context menu %q is not registered", test.name)
+			}
+			for i, label := range test.labels {
+				item := menu.ItemAt(i)
+				if item == nil || item.Label() != label {
+					t.Fatalf("context menu item %d = %v, want %q", i, item, label)
+				}
+			}
+			if menu.ItemAt(len(test.labels)) != nil {
+				t.Fatal("context menu has unexpected extra actions")
+			}
+		})
 	}
 }

@@ -548,7 +548,7 @@
       }
     } catch (error) {
       if (!disposed && loggingProcessId === id && loggingRevision === revision) {
-        loggingActionError = `Could not ${stopping ? "stop" : "start"} recording: ${errorMessage(error)}`;
+        loggingActionError = `Could not ${stopping ? "stop" : "start"} session log: ${errorMessage(error)}`;
       }
     } finally {
       if (!disposed && loggingProcessId === id) {
@@ -1010,9 +1010,9 @@
     <span
       class="recording-indicator"
       role="status"
-      aria-label={`Recording ${sessionLabel}`}
-      title={`Recording terminal output\n${loggingState.path}\nStop from Shell or the session's right-click menu.`}
-    ><span class="recording-dot" aria-hidden="true"></span><span aria-hidden="true">REC</span></span>
+      aria-label={`Session log active for ${sessionLabel}`}
+      title={`Logging terminal output\n${loggingState.path}\nStop from Shell or the session's right-click menu.`}
+    ><span class="recording-dot" aria-hidden="true"></span><span aria-hidden="true">LOG</span></span>
   {/if}
 {/snippet}
 

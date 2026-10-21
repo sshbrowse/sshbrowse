@@ -13,7 +13,7 @@
     newTabShortcut,
     tilingMode,
     recordingIndicator,
-    recordingMenu,
+    sessionMenu,
     isRecording,
     onselect,
     onclose,
@@ -28,7 +28,7 @@
     newTabShortcut: string;
     tilingMode: boolean;
     recordingIndicator: Snippet<[number]>;
-    recordingMenu: (sessionId: number) => { name: string; target: string } | null;
+    sessionMenu: (sessionId: number) => { name: string; target: string } | null;
     isRecording: (sessionId: number) => boolean;
     onselect: (id: number) => void;
     onclose: (id: number) => void;
@@ -206,7 +206,7 @@
 <div bind:this={tabbar} class="tabbar" role="tablist">
   {#each tabs as tab (tab.id)}
     {@const status = statusFor(tab)}
-    {@const menu = tab.kind === "session" ? recordingMenu(tab.sessionId) : null}
+    {@const menu = tab.kind === "session" ? sessionMenu(tab.sessionId) : null}
     <div
       class="tab"
       class:active={tab.id === activeId}
