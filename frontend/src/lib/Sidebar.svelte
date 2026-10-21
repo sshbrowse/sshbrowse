@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import Bookmark from "@lucide/svelte/icons/bookmark";
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
@@ -165,6 +165,15 @@
   }
 
   let effectiveWidth = $derived(clampWidth(width));
+  let animateVisibility = $state(false);
+  let previousVisible = untrack(() => visible);
+
+  $effect.pre(() => {
+    // Width changes from resizing or viewport clamps should take effect together with the content.
+    effectiveWidth;
+    animateVisibility = visible !== previousVisible;
+    previousVisible = visible;
+  });
 
   function setWidth(value: number) {
     resizeCurrentWidth = clampWidth(value);
@@ -810,13 +819,15 @@
 
 <div
   class="sidebar-shell"
+  class:animate-visibility={animateVisibility}
   class:is-hidden={!visible}
   class:is-resizing={resizing}
   inert={!visible || inactive}
   style={`width: ${visible ? effectiveWidth : 0}px`}
 >
+<div class="sidebar-clip">
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<aside bind:this={sidebar} id="saved-connections" class="sidebar" tabindex="-1" aria-label="Saved connections" aria-hidden={!visible || inactive} inert={!visible || inactive} onpointerdown={focusSidebarBackground}>
+<aside bind:this={sidebar} id="saved-connections" class="sidebar" style:width={`${effectiveWidth}px`} tabindex="-1" aria-label="Saved connections" aria-hidden={!visible || inactive} inert={!visible || inactive} onpointerdown={focusSidebarBackground}>
   <div class="header">
     <span class="header-actions">
       <button type="button" class="icon" aria-label="Workspaces" title="Save or open workspaces" disabled={!workspacesReady} onclick={onworkspaces}>
@@ -880,6 +891,7 @@
     </button>
   </div>
 </aside>
+</div>
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
@@ -902,8 +914,12 @@
 </div>
 
 <style>
+  .sidebar-clip {
+    /* Clip the full-width content during collapse without clipping the resize handle. */
+    height: 100%;
+    overflow: hidden;
+  }
   .sidebar {
-    width: 100%;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -926,6 +942,8 @@
     height: 100%;
     flex: none;
     min-width: 0;
+  }
+  .sidebar-shell.animate-visibility {
     transition: width 160ms ease;
   }
   .sidebar-shell.is-hidden {
@@ -937,7 +955,7 @@
     cursor: col-resize;
   }
   @media (prefers-reduced-motion: reduce) {
-    .sidebar-shell {
+    .sidebar-shell.animate-visibility {
       transition: none;
     }
   }
