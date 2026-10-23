@@ -99,7 +99,26 @@ tasks:
       - task: '{{.NATIVE_PLATFORM}}:check'
 
   verify:
-    summary: Runs checks and builds the application
+    summary: Runs checks and builds the application, with frontend checks in parallel
+    preconditions:
+      - sh: '{{if eq OS "windows"}}exit {{if eq .NATIVE_PLATFORM "unsupported"}}1{{else}}0{{end}}{{else}}test "{{.NATIVE_PLATFORM}}" != "unsupported"{{end}}'
+        msg: "SSHBrowse supports native builds on macOS, Linux and Windows"
     cmds:
-      - task: check
+      # Use the build's include namespace so run: once also covers its deps.
+      - task: '{{.NATIVE_PLATFORM}}:common:build:frontend'
+      - task: verify:parallel
+
+  verify:parallel:
+    internal: true
+    # A failed dependency cancels its sibling and fails verification.
+    deps:
+      - task: common:check:frontend
+      - task: verify:native
+
+  verify:native:
+    internal: true
+    # Keep Go commands sequential; Windows builds create and remove a .syso.
+    cmds:
+      - task: '{{.NATIVE_PLATFORM}}:check:go'
       - task: build
+      - go vet ./...

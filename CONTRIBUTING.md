@@ -35,7 +35,7 @@ Put `$(go env GOPATH)/bin` on `PATH`. The first build installs frontend dependen
 |---|---|
 | `wails3 task dev` | Live development |
 | `wails3 task check` | Go and frontend checks |
-| `wails3 task verify` | Checks and native build; pass `ARCH=arm64` on macOS ARM64 |
+| `wails3 task verify` | Checks, vet and native build; pass `ARCH=arm64` on macOS ARM64 |
 | `wails3 task run` | Run the built app |
 | `wails3 task package` | Build native packages; requires platform packaging tools |
 | `wails3 task release VERSION=x.y.z` | Build release artifacts for the current native platform; requires platform packaging tools |

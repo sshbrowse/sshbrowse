@@ -64,9 +64,6 @@ jobs:
       - name: Verify frontend and native Linux build
         run: wails3 task verify
 
-      - name: Run Go vet
-        run: go vet ./...
-
       - name: Check for generated changes
         run: git diff --exit-code
 
@@ -106,9 +103,6 @@ jobs:
       - name: Verify frontend and native Windows build
         run: wails3 task verify
 
-      - name: Run Go vet
-        run: go vet ./...
-
       - name: Check for generated changes
         run: git diff --exit-code
 
@@ -145,9 +139,6 @@ jobs:
 
       - name: Verify frontend and native macOS build
         run: wails3 task verify ARCH=arm64
-
-      - name: Run Go vet
-        run: go vet ./...
 
       - name: Check for generated changes
         run: git diff --exit-code

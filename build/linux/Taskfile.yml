@@ -39,10 +39,15 @@ tasks:
     deps:
       - task: common:build:frontend
     cmds:
+      - task: check:go
+      - task: common:check:frontend
+
+  check:go:
+    internal: true
+    platforms: [linux]
+    cmds:
       - go test ./...
       - bash build/linux/install_test.sh
-      - npm --prefix frontend run check
-      - npm --prefix frontend test
 
   package:
     summary: Packages the application as a DEB and RPM

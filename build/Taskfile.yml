@@ -1,6 +1,13 @@
 version: '3'
 
 tasks:
+  check:frontend:
+    summary: Checks frontend types and runs frontend tests
+    internal: true
+    cmds:
+      - npm --prefix frontend run check
+      - npm --prefix frontend test
+
   go:mod:tidy:
     summary: Runs `go mod tidy`
     internal: true
