@@ -1,6 +1,10 @@
 name: CI
 
 on:
+  # Populate caches on main so subsequent pull requests can restore them.
+  push:
+    branches:
+      - main
   pull_request:
     types:
       - opened
@@ -19,7 +23,7 @@ concurrency:
 jobs:
   linux:
     name: Verify Linux
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
 
@@ -68,7 +72,7 @@ jobs:
 
   windows:
     name: Verify Windows
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: windows-latest
     timeout-minutes: 25
 
@@ -110,7 +114,7 @@ jobs:
 
   macos:
     name: Verify macOS
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: macos-26
     timeout-minutes: 25
 
