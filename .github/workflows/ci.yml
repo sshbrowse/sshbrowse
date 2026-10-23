@@ -26,6 +26,8 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    env:
+      LINUX_BUILD_PACKAGES: build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
 
     steps:
       - name: Check out source
@@ -33,16 +35,40 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Linux build dependencies
+      - name: Resolve Linux build dependencies
+        id: linux-packages
+        timeout-minutes: 5
+        env:
+          LC_ALL: C
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes \
-            build-essential \
-            pkg-config \
-            libgtk-4-dev \
-            libwebkitgtk-6.0-dev
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          mkdir -p "$RUNNER_TEMP/apt-archives"
+          read -r -a packages <<< "$LINUX_BUILD_PACKAGES"
+          sudo apt-get --print-uris --no-install-recommends --yes \
+            -o "Dir::Cache::archives=$RUNNER_TEMP/apt-archives" \
+            install "${packages[@]}" > "$RUNNER_TEMP/apt-package-plan"
+          package_hash=$(sha256sum "$RUNNER_TEMP/apt-package-plan" | cut -d ' ' -f1)
+          echo "hash=$package_hash" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Linux package downloads
+        uses: actions/cache@v6
+        with:
+          # Keep APT's locks and partial downloads out of the cache.
+          path: ${{ runner.temp }}/apt-archives/*.deb
+          key: apt-v1-ubuntu-24.04-${{ runner.arch }}-${{ steps.linux-packages.outputs.hash }}
+
+      - name: Install Linux build dependencies
+        timeout-minutes: 5
+        run: |
+          read -r -a packages <<< "$LINUX_BUILD_PACKAGES"
+          sudo apt-get --no-install-recommends --yes \
+            -o "Dir::Cache::archives=$RUNNER_TEMP/apt-archives" \
+            -o APT::Keep-Downloaded-Packages=true \
+            -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+            install "${packages[@]}"
 
       - name: Set up Go
+        id: setup-go
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -55,11 +81,23 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Cache Wails CLI
+        id: wails-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/wails-cli
+          key: wails-cli-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod') }}
+
       - name: Install matching Wails CLI
+        if: steps.wails-cache.outputs.cache-hit != 'true'
+        env:
+          GOBIN: ${{ runner.temp }}/wails-cli
         run: |
           wails_version=$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)
           go install "github.com/wailsapp/wails/v3/cmd/wails3@$wails_version"
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Add Wails CLI to PATH
+        run: echo "$RUNNER_TEMP/wails-cli" >> "$GITHUB_PATH"
 
       - name: Verify frontend and native Linux build
         run: wails3 task verify
@@ -80,6 +118,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
+        id: setup-go
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -92,13 +131,25 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Cache Wails CLI
+        id: wails-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/wails-cli
+          key: wails-cli-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod') }}
+
       - name: Install matching Wails CLI
+        if: steps.wails-cache.outputs.cache-hit != 'true'
+        env:
+          GOBIN: ${{ runner.temp }}/wails-cli
         run: |
           $wailsVersion = go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go install "github.com/wailsapp/wails/v3/cmd/wails3@$wailsVersion"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          (Join-Path (go env GOPATH) 'bin') >> $env:GITHUB_PATH
+
+      - name: Add Wails CLI to PATH
+        run: (Join-Path $env:RUNNER_TEMP 'wails-cli') >> $env:GITHUB_PATH
 
       - name: Verify frontend and native Windows build
         run: wails3 task verify
@@ -119,6 +170,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
+        id: setup-go
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -131,11 +183,23 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Cache Wails CLI
+        id: wails-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/wails-cli
+          key: wails-cli-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod') }}
+
       - name: Install matching Wails CLI
+        if: steps.wails-cache.outputs.cache-hit != 'true'
+        env:
+          GOBIN: ${{ runner.temp }}/wails-cli
         run: |
           wails_version=$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)
           go install "github.com/wailsapp/wails/v3/cmd/wails3@$wails_version"
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Add Wails CLI to PATH
+        run: echo "$RUNNER_TEMP/wails-cli" >> "$GITHUB_PATH"
 
       - name: Verify frontend and native macOS build
         run: wails3 task verify ARCH=arm64
