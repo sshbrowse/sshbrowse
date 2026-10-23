@@ -698,7 +698,7 @@
       fontFamily: terminalFontFamilyFor(terminalFontName),
       fontSize,
       cursorBlink: true,
-      macOptionIsMeta: true,
+      macOptionIsMeta: false,
       theme: terminalThemeFor(themeName, terminalColors, customPalette),
       minimumContrastRatio: terminalMinimumContrastRatio(themeName, terminalColors),
       scrollback: normalizeTerminalScrollback(scrollbackLines),
