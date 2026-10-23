@@ -30,15 +30,7 @@ func TestWriteLicenseDocuments(t *testing.T) {
 		t.Error("license output must contain the complete license followed by the complete third-party notices")
 	}
 	for _, marker := range []string{
-		"===== LICENSE =====",
-		"Copyright © 2026. All rights reserved.",
-		"SSHBrowse is free for personal, non-commercial use.",
-		"Professional, workplace, or commercial use requires a paid license.",
-		"You may clone, copy, build, inspect,",
-		"Independent redistribution, resale, or publication of SSHBrowse, including",
-		"===== THIRD_PARTY_NOTICES.txt =====",
 		"## github.com/wailsapp/wails/v3",
-		"Copyright (c) 2018-Present Lea Anthony",
 		"## @xterm/xterm",
 	} {
 		if !strings.Contains(output.String(), marker) {

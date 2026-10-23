@@ -201,14 +201,23 @@ func TestBackupPreviewCancellationAndExpiry(t *testing.T) {
 
 func TestBackupExportProtectsActiveFiles(t *testing.T) {
 	b := newTestBackup(t)
+	workspacePath := filepath.Join(filepath.Dir(b.storePath), "workspaces.json")
+	originalWorkspace := []byte("placeholder data that must survive export")
+	if err := os.WriteFile(workspacePath, originalWorkspace, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	for _, path := range []string{
 		b.storePath, b.storePath + ".lock", b.recoveryPath(),
 		filepath.Join(filepath.Dir(b.storePath), "window.json"),
-		filepath.Join(filepath.Dir(b.storePath), "workspaces.json"),
+		workspacePath,
 	} {
 		if err := b.exportFile(path, testBackupPreferences()); err == nil {
 			t.Fatal("export could overwrite active app data")
 		}
+	}
+	gotWorkspace, err := os.ReadFile(workspacePath)
+	if err != nil || !bytes.Equal(gotWorkspace, originalWorkspace) {
+		t.Fatalf("export changed the saved workspaces: %q, %v", gotWorkspace, err)
 	}
 	output := filepath.Join(t.TempDir(), "backup.json")
 	if err := b.exportFile(output, testBackupPreferences()); err != nil {
@@ -216,22 +225,6 @@ func TestBackupExportProtectsActiveFiles(t *testing.T) {
 	}
 	if info, err := os.Stat(output); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatal("export permissions are not private")
-	}
-}
-
-func TestBackupExportPreservesWorkspaceFile(t *testing.T) {
-	b := newTestBackup(t)
-	path := filepath.Join(filepath.Dir(b.storePath), "workspaces.json")
-	original := []byte("placeholder data that must survive export")
-	if err := os.WriteFile(path, original, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := b.exportFile(path, testBackupPreferences()); err == nil {
-		t.Fatal("export accepted an active workspace file")
-	}
-	got, err := os.ReadFile(path)
-	if err != nil || !bytes.Equal(got, original) {
-		t.Fatalf("export changed the saved workspaces: %q, %v", got, err)
 	}
 }
 

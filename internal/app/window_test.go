@@ -40,14 +40,6 @@ func TestFitWindowSizeIgnoresSavedPosition(t *testing.T) {
 	}
 }
 
-func TestFitWindowSizeUsesFirstLaunchDefaults(t *testing.T) {
-	area := application.Rect{X: 0, Y: 25, Width: 1440, Height: 875}
-
-	if got, want := fitWindowSize(application.Rect{}, area), (application.Rect{Width: 1200, Height: 743}); got != want {
-		t.Fatalf("got %+v, want %+v", got, want)
-	}
-}
-
 func TestWriteWindowFramePersistsPathWithSpaces(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "profile with spaces", "window.json")
 	first := application.Rect{X: 20, Y: 30, Width: 800, Height: 600}

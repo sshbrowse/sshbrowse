@@ -1,6 +1,7 @@
 package workspaces
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -125,7 +126,8 @@ func TestLoadMalformedNamedDataWarnsAndMutationsDoNotOverwrite(t *testing.T) {
 func TestOversizedWorkspaceDataWarnsAndIsNotOverwritten(t *testing.T) {
 	connectionsPath := filepath.Join(t.TempDir(), "connections.json")
 	workspacePath := filepath.Join(filepath.Dir(connectionsPath), workspaceFileName)
-	if err := os.WriteFile(workspacePath, make([]byte, maxFileBytes+1), 0o600); err != nil {
+	original := make([]byte, maxFileBytes+1)
+	if err := os.WriteFile(workspacePath, original, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	state := NewStore(connectionsPath).Load()
@@ -134,6 +136,13 @@ func TestOversizedWorkspaceDataWarnsAndIsNotOverwritten(t *testing.T) {
 	}
 	if _, err := NewStore(connectionsPath).Save("New", emptyLayout()); err == nil {
 		t.Fatal("Save overwrote oversized data")
+	}
+	after, err := os.ReadFile(workspacePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(after, original) {
+		t.Fatal("oversized data changed after failed save")
 	}
 }
 

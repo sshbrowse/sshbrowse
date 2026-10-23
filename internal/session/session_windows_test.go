@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -244,9 +245,20 @@ func TestConPTYPreservesSustainedUnicodeOutputOrder(t *testing.T) {
 	outputMu.Lock()
 	received := strings.ReplaceAll(output.String(), "\r", "")
 	outputMu.Unlock()
-	first, last := strings.Index(received, firstLine), strings.Index(received, lastLine)
-	if first < 0 || last < first || !strings.Contains(received, unicodeLine) {
-		t.Fatalf("sustained output is incomplete or out of order: first=%d last=%d unicode=%t bytes=%d", first, last, strings.Contains(received, unicodeLine), len(received))
+	// ConPTY may prefix lines with cursor or rendering escapes. Match complete
+	// record text rather than requiring each record to start a raw output line.
+	records := regexp.MustCompile(`LINE-[0-9]{4}-ASCII`).FindAllString(received, -1)
+	if len(records) != lineCount {
+		t.Fatalf("received %d complete ASCII records, want %d (first=%q last=%q bytes=%d)", len(records), lineCount, firstLine, lastLine, len(received))
+	}
+	for index, record := range records {
+		want := fmt.Sprintf("LINE-%04d-ASCII", index+1)
+		if record != want {
+			t.Fatalf("ASCII record %d = %q, want %q", index+1, record, want)
+		}
+	}
+	if !strings.Contains(received, unicodeLine) {
+		t.Fatalf("sustained output omitted Unicode record %q (bytes=%d)", unicodeLine, len(received))
 	}
 }
 

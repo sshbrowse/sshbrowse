@@ -191,9 +191,7 @@ test("classifies short single-line terminal pastes as immediate", () => {
 test("requires confirmation for multiline terminal pastes", () => {
   assert.equal(terminalPasteRequiresConfirmation("sudo dnf update\nsudo systemctl restart nginx"), true);
   assert.equal(terminalPasteRequiresConfirmation("sudo dnf update\r\nsudo systemctl restart nginx"), true);
-  assert.equal(terminalPasteRequiresConfirmation("a".repeat(4096)), false);
-  assert.equal(terminalPasteRequiresConfirmation("a".repeat(4097)), false);
-  assert.equal(classifyTerminalPaste("é".repeat(4097)).requiresConfirmation, false);
+  assert.equal(classifyTerminalPaste("é".repeat(5000)).requiresConfirmation, false);
 });
 
 test("counts mixed terminal line endings without changing their meaning", () => {

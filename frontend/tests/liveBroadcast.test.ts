@@ -221,7 +221,7 @@ test("stale broadcast paste is rejected after a process change", () => {
   assert.equal(liveBroadcastPasteError(snapshot, [liveSession(1, 101), liveSession(2, 102)], 1, 1, 101, 2), null);
 });
 
-test("clipboard paste keeps the broadcast generation captured before the read", () => {
+test("clipboard paste checks the generation captured before the read", async () => {
   // A -> B changes twice: stopping A and starting B. Equal recipient counts do not make A's paste valid for B.
   const broadcastB = [target(1, 101), target(3, 103)];
   assert.equal(
@@ -229,18 +229,14 @@ test("clipboard paste keeps the broadcast generation captured before the read", 
     null,
   );
   assert.match(liveBroadcastPasteGenerationError(4, 6) ?? "", /broadcast changed/);
-
-  // A paste started while broadcasting is off must also be rejected if a broadcast starts during the clipboard read.
-  assert.match(liveBroadcastPasteGenerationError(8, 9) ?? "", /broadcast changed/);
   assert.equal(liveBroadcastPasteGenerationError(9, 9), null);
-});
 
-test("deferred clipboard reads cannot paste into a newer broadcast", async () => {
-  async function checkGenerationChange(
+  async function checkClipboardRead(
     startGeneration: number,
     startRecipientCount: number | null,
     nextGeneration: number,
     nextRecipientCount: number | null,
+    shouldPaste: boolean,
   ) {
     let state = { generation: startGeneration, recipientCount: startRecipientCount };
     let resolveClipboard!: (text: string) => void;
@@ -262,12 +258,19 @@ test("deferred clipboard reads cannot paste into a newer broadcast", async () =>
     resolveClipboard("clipboard contents");
     await pendingPaste;
 
-    assert.deepEqual(pastes, []);
-    assert.deepEqual(rejected, [[startGeneration, startRecipientCount, nextGeneration, nextRecipientCount]]);
+    if (shouldPaste) {
+      assert.deepEqual(pastes, ["clipboard contents"]);
+      assert.deepEqual(rejected, []);
+    } else {
+      assert.deepEqual(pastes, []);
+      assert.deepEqual(rejected, [[startGeneration, startRecipientCount, nextGeneration, nextRecipientCount]]);
+    }
   }
 
   // Broadcast A stops and B starts while the read is pending.
-  await checkGenerationChange(4, 2, 6, 2);
+  await checkClipboardRead(4, 2, 6, 2, false);
   // Broadcasting starts while a non-broadcast clipboard read is pending.
-  await checkGenerationChange(8, null, 9, 2);
+  await checkClipboardRead(8, null, 9, 2, false);
+  // An unchanged generation accepts the clipboard contents.
+  await checkClipboardRead(9, 2, 9, 2, true);
 });

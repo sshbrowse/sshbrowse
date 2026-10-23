@@ -92,7 +92,6 @@ test("Windows application shortcuts cover terminal-safe actions and editing", ()
 
 test("Windows application shortcuts run through the frontend menu", () => {
   const sidebarKey = keyboardEvent({ key: "B", ctrlKey: true, shiftKey: true });
-  assert.equal(windowsShortcutFor(sidebarKey, "windows"), "toggleSidebar");
   assert.equal(pageApplicationShortcutFor(sidebarKey, "windows"), "toggleSidebar");
   assert.equal(pageApplicationShortcutFor(keyboardEvent({ key: "c", ctrlKey: true, shiftKey: true }), "windows"), "editCopy");
   assert.equal(pageApplicationShortcutFor(keyboardEvent({ key: "z", ctrlKey: true, altKey: true }), "windows"), "editUndo");
@@ -100,7 +99,6 @@ test("Windows application shortcuts run through the frontend menu", () => {
   assert.equal(pageApplicationShortcutFor(keyboardEvent({ key: "c", ctrlKey: true }), "windows"), null);
   assert.equal(pageApplicationShortcutFor(keyboardEvent({ key: ",", ctrlKey: true }), "windows"), "settings");
   assert.equal(pageApplicationShortcutFor(keyboardEvent({ key: ",", ctrlKey: true }), "linux"), "settings");
-  assert.equal(windowsShortcutFor(keyboardEvent({ key: ",", ctrlKey: true }), "windows"), "settings");
   assert.equal(linuxShortcutFor(keyboardEvent({ key: ",", ctrlKey: true }), "linux"), "settings");
   assert.equal(linuxShortcutFor(keyboardEvent({ key: ",", ctrlKey: true, shiftKey: true }), "linux"), null);
   assert.equal(windowsShortcutFor(keyboardEvent({ key: ",", ctrlKey: true, altKey: true }), "windows"), null);

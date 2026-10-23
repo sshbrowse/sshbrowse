@@ -27,6 +27,25 @@ function storage(values: Record<string, string> = {}) {
   };
 }
 
+const expectedDefaults = {
+  sidebarWidth: 248,
+  sidebarVisible: true,
+  tilingMode: false,
+  rightClickToPaste: false,
+  copyOnSelection: true,
+  checkUpdatesOnStartup: true,
+  terminalScrollbackLines: 1000,
+  collapsedFolders: {},
+  terminalPasteWarningsDisabled: false,
+  themeName: "classic",
+  customPalette: defaultCustomPalette,
+  terminalColors: "follow",
+  uiSize: "standard",
+  terminalFontSize: 14,
+  interfaceScale: 1,
+  terminalFontName: "system",
+};
+
 test("current preferences load correctly", () => {
   const preferences = storage({
     [preferenceKeys.sidebarWidth]: "280",
@@ -66,24 +85,7 @@ test("current preferences load correctly", () => {
 });
 
 test("missing preferences use defaults", () => {
-  assert.deepEqual(loadPreferences(storage()), {
-    sidebarWidth: 248,
-    sidebarVisible: true,
-    tilingMode: false,
-    rightClickToPaste: false,
-    copyOnSelection: true,
-    checkUpdatesOnStartup: true,
-    terminalScrollbackLines: 1000,
-    collapsedFolders: {},
-    terminalPasteWarningsDisabled: false,
-    themeName: "classic",
-    customPalette: defaultCustomPalette,
-    terminalColors: "follow",
-    uiSize: "standard",
-    terminalFontSize: 14,
-    interfaceScale: 1,
-    terminalFontName: "system",
-  });
+  assert.deepEqual(loadPreferences(storage()), expectedDefaults);
 });
 
 test("invalid preference values fall back to safe defaults", () => {
@@ -104,24 +106,7 @@ test("invalid preference values fall back to safe defaults", () => {
     [preferenceKeys.terminalFontName]: "comic",
   });
 
-  assert.deepEqual(loadPreferences(preferences), {
-    sidebarWidth: 248,
-    sidebarVisible: true,
-    tilingMode: false,
-    rightClickToPaste: false,
-    copyOnSelection: true,
-    checkUpdatesOnStartup: true,
-    terminalScrollbackLines: 1000,
-    collapsedFolders: {},
-    terminalPasteWarningsDisabled: false,
-    themeName: "classic",
-    customPalette: defaultCustomPalette,
-    terminalColors: "follow",
-    uiSize: "standard",
-    terminalFontSize: 14,
-    interfaceScale: 1,
-    terminalFontName: "system",
-  });
+  assert.deepEqual(loadPreferences(preferences), expectedDefaults);
 });
 
 test("older theme preferences keep following the interface", () => {
@@ -200,24 +185,7 @@ test("preference reads fall back safely when storage is unavailable", () => {
     },
   };
 
-  assert.deepEqual(loadPreferences(preferences), {
-    sidebarWidth: 248,
-    sidebarVisible: true,
-    tilingMode: false,
-    rightClickToPaste: false,
-    copyOnSelection: true,
-    checkUpdatesOnStartup: true,
-    terminalScrollbackLines: 1000,
-    collapsedFolders: {},
-    terminalPasteWarningsDisabled: false,
-    themeName: "classic",
-    customPalette: defaultCustomPalette,
-    terminalColors: "follow",
-    uiSize: "standard",
-    terminalFontSize: 14,
-    interfaceScale: 1,
-    terminalFontName: "system",
-  });
+  assert.deepEqual(loadPreferences(preferences), expectedDefaults);
   savePreference(preferences, preferenceKeys.sidebarVisible, "false");
 });
 

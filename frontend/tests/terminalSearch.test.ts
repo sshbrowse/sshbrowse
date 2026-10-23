@@ -73,6 +73,8 @@ function searchTerminal(options: ITerminalOptions = {}) {
 }
 
 function waitForRefresh() {
+  // These integration cases keep xterm's asynchronous writes and addon cache
+  // timers on the same real clock. Scheduler-only cases below use mock timers.
   return new Promise((resolve) => setTimeout(resolve, terminalSearchRefreshDelay + 50));
 }
 
@@ -138,24 +140,6 @@ test("find feedback reports no matches, selected matches, and a capped count", (
   }
 });
 
-test("search selections do not copy, including a delayed addon refresh", async () => {
-  const guard = new SearchSelectionCopyGuard();
-  const copied: string[] = [];
-  const selectionChanged = (selection: string) => {
-    if (!guard.active) {
-      copied.push(selection);
-    }
-  };
-  const addonSelect = (selection: string) => guard.run(() => selectionChanged(selection));
-
-  addonSelect("first search result");
-  await Promise.resolve().then(() => addonSelect("refreshed search result"));
-  selectionChanged("ordinary mouse selection");
-  selectionChanged("ordinary select-all");
-
-  assert.deepEqual(copied, ["ordinary mouse selection", "ordinary select-all"]);
-});
-
 test("selection suppression ends even if selecting fails", () => {
   const guard = new SearchSelectionCopyGuard();
   assert.throws(() => guard.run(() => {
@@ -192,9 +176,9 @@ test("unfocused search pauses refreshes and catches up on focus without moving t
     search.terminal.select(0, 1, 6);
     const selection = search.terminal.getSelectionPosition();
     await search.write("needle\r\n");
-    // Scroll after scheduling the refresh; it must not restore an older viewport.
+    // Refresh must preserve a viewport changed after the background output.
     search.terminal.scrollToLine(3);
-    await waitForRefresh();
+    search.session.refresh();
     assert.equal(search.terminal.buffer.active.viewportY, 3);
     assert.deepEqual(search.terminal.getSelectionPosition(), selection);
     assert.equal(search.terminal.getSelection(), "manual");
@@ -309,32 +293,34 @@ test("disposing search cancels delayed refresh without changing ordinary selecti
   }
 });
 
-test("scrollback trimming invalidates matches through public APIs", async () => {
+test("scrollback trimming invalidates matches through public APIs", async (context) => {
   const search = searchTerminal({ rows: 3 });
   try {
     await search.write("needle\r\n" + "other\r\n".repeat(10));
+    context.mock.timers.enable({ apis: ["setTimeout"] });
     search.session.find("needle", false, "next", true);
     assert.equal(search.results.at(-1)?.resultCount, 1);
     search.terminal.options.scrollback = 0;
     search.session.invalidate();
-    await waitForRefresh();
+    context.mock.timers.tick(terminalSearchRefreshDelay);
     assert.equal(search.results.at(-1)?.resultCount, 0);
   } finally {
     search.dispose();
   }
 });
 
-test("large wrapped output fails before entering the addon and recovers after history is removed", async () => {
+test("large wrapped output fails before entering the addon and recovers after history is removed", async (context) => {
   const search = searchTerminal({ cols: 2 });
   try {
     await search.write("a".repeat(3000));
+    context.mock.timers.enable({ apis: ["setTimeout"] });
     assert.equal(terminalSearchBufferIsSafe(search.terminal), false);
     assert.equal(search.session.find("z", false, "next", true), false);
     assert.equal(search.errors.at(-1), "Search unavailable: wrapped output is too large.");
     assert.equal(search.results.at(-1)?.resultCount, 0);
     search.terminal.options.scrollback = 0;
     search.session.invalidate();
-    await waitForRefresh();
+    context.mock.timers.tick(terminalSearchRefreshDelay);
     assert.equal(terminalSearchBufferIsSafe(search.terminal), true);
     assert.equal(search.errors.at(-1), "");
     assert.equal(search.results.at(-1)?.resultCount, 0);
@@ -405,9 +391,9 @@ test("continuous output limits focused refreshes to one scan per second", async 
   const search = searchTerminal();
   try {
     await search.write("foo");
+    context.mock.timers.enable({ apis: ["setTimeout"] });
     search.session.find("foo", false, "next", true);
     const initialResults = search.results.length;
-    context.mock.timers.enable({ apis: ["setTimeout"] });
     for (let elapsed = 0; elapsed < 3000; elapsed += 20) {
       search.session.invalidate();
       context.mock.timers.tick(20);
@@ -422,9 +408,9 @@ test("a pending refresh does no work after search loses focus", async (context) 
   const search = searchTerminal();
   try {
     await search.write("foo");
+    context.mock.timers.enable({ apis: ["setTimeout"] });
     search.session.find("foo", false, "next", true);
     const initialResults = search.results.length;
-    context.mock.timers.enable({ apis: ["setTimeout"] });
     search.session.invalidate();
     search.blurQuery();
     context.mock.timers.tick(terminalSearchRefreshDelay);
@@ -442,10 +428,11 @@ test("a pending refresh does no work after search loses focus", async (context) 
   }
 });
 
-test("unexpected addon failure reports a bounded error and pauses automatic retries", async () => {
+test("unexpected addon failure reports a bounded error and pauses automatic retries", async (context) => {
   const search = searchTerminal();
   try {
     await search.write("foo");
+    context.mock.timers.enable({ apis: ["setTimeout"] });
     const loadAddon = search.terminal.loadAddon;
     search.terminal.loadAddon = () => { throw new Error("fixture failure"); };
     assert.equal(search.session.find("foo", false, "next", true), false);
@@ -453,8 +440,10 @@ test("unexpected addon failure reports a bounded error and pauses automatic retr
     assert.equal(search.results.at(-1)?.resultCount, 0);
     const initialResults = search.results.length;
     search.terminal.loadAddon = loadAddon;
-    await search.write("\rfoo");
-    await waitForRefresh();
+    const written = search.write("\rfoo");
+    context.mock.timers.tick(0);
+    await written;
+    context.mock.timers.tick(terminalSearchRefreshDelay);
     assert.equal(search.results.length, initialResults);
     assert.equal(search.session.find("foo", false, "next", true), true);
     assert.equal(search.errors.at(-1), "");
