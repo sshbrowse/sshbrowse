@@ -39,6 +39,12 @@ tasks:
     summary: Runs Go and frontend checks natively on macOS
     deps:
       - task: common:build:frontend
+    cmds:
+      - task: check:go
+      - task: common:check:frontend
+
+  check:go:
+    internal: true
     # Match the native build so test binaries use the supported macOS floor.
     env:
       MACOSX_DEPLOYMENT_TARGET: "15.0"
@@ -46,8 +52,6 @@ tasks:
       CGO_LDFLAGS: "-mmacosx-version-min=15.0"
     cmds:
       - go test ./...
-      - npm --prefix frontend run check
-      - npm --prefix frontend test
 
   build:universal:
     summary: Builds a universal macOS binary
