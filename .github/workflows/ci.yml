@@ -117,6 +117,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Configure Go cache paths
+        run: |
+          "GOMODCACHE=$(Join-Path $env:RUNNER_TEMP 'go-mod')" >> $env:GITHUB_ENV
+          "GOCACHE=$(Join-Path $env:RUNNER_TEMP 'go-build')" >> $env:GITHUB_ENV
+
       - name: Set up Go
         id: setup-go
         uses: actions/setup-go@v7
