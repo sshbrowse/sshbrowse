@@ -8,7 +8,7 @@ Focused bug fixes, reliability fixes, performance improvements, and maintenance 
 
 Discuss larger features, rewrites, architectural changes, and broad cleanup in an issue before implementing them so we can agree on the problem and scope.
 
-Submitting a pull request does not obligate maintainers to review or merge it. They may close or defer it, suggest a smaller change, or implement the idea independently. Draft pull requests are also triaged and may be closed. Maintainers decide which contributions to accept.
+Maintainers may close or defer pull requests, including drafts, suggest a smaller change, or implement the idea independently. Submission does not guarantee review or merging.
 
 Keep PRs focused, preserve unrelated work, and explain the problem, the change, and how you tested it. Include any platform limitations or validation gaps.
 

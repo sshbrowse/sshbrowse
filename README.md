@@ -1,10 +1,10 @@
 # SSHBrowse
 
-SSHBrowse is a cross-platform desktop app for managing SSH, SFTP, and local terminal sessions. It is built for people looking for a modern alternative to SecureCRT, MobaXterm, and other session managers.
+SSHBrowse is a desktop app for SSH, SFTP, and local terminals on macOS, Windows, and Linux. It is built for people looking for a modern alternative to SecureCRT, MobaXterm, and other session managers.
 
-Save and organize connections, open sessions in tabs or tiles, and send commands or live input to multiple terminals at once. SSHBrowse runs on macOS, Windows, and Linux.
+Organize connections, work in tabs or tiles, and send commands or live input to multiple terminals at once.
 
-SSHBrowse is currently in beta. Feedback, bug reports, and contributions are welcome.
+Currently in beta. Feedback, bug reports, and contributions are welcome.
 
 [Releases](https://github.com/sshbrowse/sshbrowse/releases) · [Report a bug](https://github.com/sshbrowse/sshbrowse/issues/new/choose) · [Contribute](CONTRIBUTING.md)
 
@@ -12,15 +12,15 @@ SSHBrowse is currently in beta. Feedback, bug reports, and contributions are wel
 
 ## Your OpenSSH, not ours
 
-The actual SSH and SFTP connections, authentication, host-key verification, and SSH configuration are handled by your system's `ssh` and `sftp` clients.
+SSHBrowse uses your system's `ssh` and `sftp` clients for connections, authentication, host-key verification, and SSH configuration.
 
-SSHBrowse does not implement the SSH protocol itself, proxy SSH traffic through another service, or store your passwords or private keys.
+It does not proxy SSH traffic or store passwords or private keys.
 
 ## Highlights
 
 - Save and organize SSH connections in folders
 - Import aliases from your OpenSSH config
-- Choose a saved connection as a jump host, or enter a raw ProxyJump route
+- Connect through jump hosts or ProxyJump routes
 - Open SSH, SFTP, and local terminal sessions
 - Search terminal output and configure scrollback history
 - [Record terminal output](docs/usage.md#session-logging) to text files
@@ -30,21 +30,19 @@ SSHBrowse does not implement the SSH protocol itself, proxy SSH traffic through 
 
 ## Platforms
 
-SSHBrowse provides native packages for macOS, Windows, and Linux. The following platforms have been tested with packaged releases:
-
 | Platform | Package | Notes |
 | --- | --- | --- |
-| macOS 15+ (Apple silicon and Intel) | Universal DMG | Native packaged acceptance performed on Apple silicon. Ad-hoc signed, not notarized; Gatekeeper may require manual approval. |
-| Linux x86-64 | Binary, DEB or RPM | Requires GTK4 and WebKitGTK 6.0. Fedora 44 GNOME/Wayland RPM and Ubuntu 26.04 GNOME/Wayland DEB accepted natively. Other distributions are less tested. Local packages are not repository-signed. |
-| Windows 11 x64 only | Per-user installer | Native acceptance has covered the installer and core SSH/SFTP behavior. Requires the Windows OpenSSH Client and Microsoft Edge WebView2 Runtime, normally included with Windows 11; Setup stops if WebView2 is missing. SSHBrowse does not bundle, download, or install WebView2. The installer is unsigned; SmartScreen may warn. |
+| macOS 15+ (Apple silicon and Intel) | Universal DMG | Not notarized; Gatekeeper may require manual approval. |
+| Linux x86-64 | Binary, DEB or RPM | Requires GTK4, WebKitGTK 6.0, and OpenSSH. Packages are not repository-signed. |
+| Windows 11 x64 | Per-user installer | Requires OpenSSH Client and WebView2 Runtime. Installer is unsigned; SmartScreen may warn. |
 
-For release downloads, check the architecture and compare the SHA-256 hash with `SHA256SUMS`.
+Choose the package for your architecture and verify its SHA-256 hash against `SHA256SUMS`.
 
 ## Get started
 
 Download the latest package from [Releases](https://github.com/sshbrowse/sshbrowse/releases).
 
-See [Linux installation](docs/installation.md) for package and per-user installation options.
+For Linux, see the [installation guide](docs/installation.md).
 
 After launching SSHBrowse, you can:
 
@@ -53,16 +51,15 @@ After launching SSHBrowse, you can:
 - Move saved connections and preferences with **Settings > General > Backup & restore**
 - Enter `user@host:port` directly in the new-tab picker
 
-See the [usage guide](docs/usage.md) for connections, sessions, terminal tools,
-and moving your setup between computers.
+See the [usage guide](docs/usage.md) for session and terminal tools.
 
 ## Help and contributing
 
-Release builds check GitHub for updates at startup, at most once every 24 hours. Disable this in **Settings > General > Updates**. Downloads and restarts require your approval. Linux binaries installed at `~/.local/bin/sshbrowse` support in-app updates; DEB/RPM installations link to the release for package updates.
+Release builds check GitHub for updates at startup, at most once a day. Disable checks in **Settings > General > Updates**. Downloads and restarts require your approval. See [Linux update options](docs/installation.md).
 
-For connection problems, try the same destination with system OpenSSH (`ssh alias` or `ssh user@host`). Use the [bug report form](https://github.com/sshbrowse/sshbrowse/issues/new/choose) for bugs and [SECURITY.md](SECURITY.md) for private vulnerability reports. Redact credentials and private host details.
+For connection problems, try the same destination with system OpenSSH (`ssh alias` or `ssh user@host`). [Report bugs](https://github.com/sshbrowse/sshbrowse/issues/new/choose) with credentials and private host details removed. Report vulnerabilities privately through [SECURITY.md](SECURITY.md).
 
-Bug reports, suggestions, and focused pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, contribution terms, and guidance on discussing larger changes first.
+Suggestions and focused pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licensing
 
