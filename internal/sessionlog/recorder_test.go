@@ -258,7 +258,7 @@ func TestRecorderCloseDrainsAcceptedConcurrentWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	const writers = 32
-	var successful atomic.Int32
+	accepted := make(chan string, writers)
 	start := make(chan struct{})
 	var workers sync.WaitGroup
 	for i := 0; i < writers; i++ {
@@ -266,27 +266,52 @@ func TestRecorderCloseDrainsAcceptedConcurrentWrites(t *testing.T) {
 		go func(i int) {
 			defer workers.Done()
 			<-start
-			if err := recorder.Write([]byte(fmt.Sprintf("record-%02d\n", i))); err == nil {
-				successful.Add(1)
+			record := fmt.Sprintf("record-%02d", i)
+			if err := recorder.Write([]byte(record + "\n")); err == nil {
+				accepted <- record
 			} else if !errors.Is(err, ErrClosed) {
 				t.Errorf("Write() error = %v", err)
 			}
 		}(i)
 	}
 	close(start)
+	// Let one concurrent writer succeed before Close can reject the rest.
+	var firstAccepted string
+	select {
+	case firstAccepted = <-accepted:
+	case <-time.After(time.Second):
+		t.Fatal("no concurrent write was accepted before close")
+	}
 	closeDone := make(chan error, 1)
 	go func() { closeDone <- recorder.Close("concurrent close") }()
 	workers.Wait()
 	if err := <-closeDone; err != nil {
 		t.Fatal(err)
 	}
+	close(accepted)
+	wantRecords := map[string]struct{}{firstAccepted: {}}
+	for record := range accepted {
+		wantRecords[record] = struct{}{}
+	}
 	data, err := os.ReadFile(recorder.Path())
 	if err != nil {
 		t.Fatal(err)
 	}
-	count := strings.Count(string(data), "record-")
-	if count != int(successful.Load()) {
-		t.Fatalf("transcript contains %d accepted records, Write accepted %d", count, successful.Load())
+	gotRecords := make(map[string]struct{}, len(wantRecords))
+	gotRecordCount := 0
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "record-") {
+			gotRecordCount++
+			gotRecords[line] = struct{}{}
+		}
+	}
+	if gotRecordCount != len(wantRecords) {
+		t.Fatalf("transcript contains %d record lines, want %d accepted records", gotRecordCount, len(wantRecords))
+	}
+	for record := range wantRecords {
+		if _, ok := gotRecords[record]; !ok {
+			t.Errorf("transcript is missing accepted record %q", record)
+		}
 	}
 }
 

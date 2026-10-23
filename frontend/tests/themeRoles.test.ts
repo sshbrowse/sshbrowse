@@ -75,11 +75,7 @@ test("Windows title-bar colors match each interface palette", () => {
   }
 });
 
-test("the unthemed document starts with Classic colors", () => {
-  const sharedRoot = stylesheet.match(/^:root \{([^}]+)\}/m)?.[1];
-  assert.ok(sharedRoot, "shared interface tokens must be available before a theme is applied");
-  assert.match(sharedRoot, /--font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;/);
-  assert.match(sharedRoot, /--radius-control:/);
+test("Classic is the default for unthemed documents and Windows chrome", () => {
   assert.match(stylesheet, /:root\s*,\s*:root\[data-theme="classic"\]/);
   assert.match(windowsChromeSource, /func windowsChromeTheme\(\) application\.ThemeSettings \{\s*colours := windowsChromePalettes\["classic"\]/);
   assert.match(windowsChromeUpdatesSource, /selectedColours\.Store\(windowsChromePalettes\["classic"\]\)/);

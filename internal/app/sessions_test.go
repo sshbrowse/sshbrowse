@@ -131,53 +131,43 @@ func TestSessionsResolveCurrentSavedJump(t *testing.T) {
 }
 
 func TestSessionLoggingSettingsPersistResolvedValues(t *testing.T) {
-	store := profile.NewStore(filepath.Join(t.TempDir(), "connections.json"))
-	sessions := NewSessions(nil, store)
-	directory := filepath.Join(t.TempDir(), "session logs")
-	saved, err := sessions.SaveLoggingSettings(LoggingSettings{
-		Directory: directory,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !filepath.IsAbs(saved.Directory) {
-		t.Fatalf("saved directory is not resolved: %q", saved.Directory)
-	}
-	if _, err := os.Stat(directory); !os.IsNotExist(err) {
-		t.Fatalf("saving settings created the log directory: stat error = %v", err)
-	}
-	got, err := sessions.GetLoggingSettings()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != saved {
-		t.Fatalf("settings after reload = %+v, want %+v", got, saved)
-	}
-}
-
-func TestSessionLoggingSettingsPreserveTrailingSpaceDirectory(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows does not preserve trailing spaces in directory names")
-	}
-	directory := filepath.Join(t.TempDir(), "session logs ")
-	if err := os.Mkdir(directory, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	sessions := NewSessions(nil, profile.NewStore(filepath.Join(t.TempDir(), "connections.json")))
-	saved, err := sessions.SaveLoggingSettings(LoggingSettings{
-		Directory: directory,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if saved.Directory != directory {
-		t.Fatalf("resolved directory = %q, want exact selected path %q", saved.Directory, directory)
-	}
-	loaded, err := sessions.GetLoggingSettings()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if loaded.Directory != directory {
-		t.Fatalf("stored directory = %q, want exact selected path %q", loaded.Directory, directory)
+	for _, test := range []struct {
+		name, directoryName string
+		exists              bool
+	}{
+		{"new directory", "session logs", false},
+		{"existing directory with trailing space", "session logs ", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if runtime.GOOS == "windows" && test.exists {
+				t.Skip("Windows does not preserve trailing spaces in directory names")
+			}
+			directory := filepath.Join(t.TempDir(), test.directoryName)
+			if test.exists {
+				if err := os.Mkdir(directory, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			sessions := NewSessions(nil, profile.NewStore(filepath.Join(t.TempDir(), "connections.json")))
+			saved, err := sessions.SaveLoggingSettings(LoggingSettings{Directory: directory})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !filepath.IsAbs(saved.Directory) || saved.Directory != directory {
+				t.Fatalf("resolved directory = %q, want exact selected path %q", saved.Directory, directory)
+			}
+			if !test.exists {
+				if _, err := os.Stat(directory); !os.IsNotExist(err) {
+					t.Fatalf("saving settings created the log directory: stat error = %v", err)
+				}
+			}
+			loaded, err := sessions.GetLoggingSettings()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if loaded != saved {
+				t.Fatalf("settings after reload = %+v, want %+v", loaded, saved)
+			}
+		})
 	}
 }
