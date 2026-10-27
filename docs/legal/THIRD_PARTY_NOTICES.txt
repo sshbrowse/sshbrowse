@@ -137,7 +137,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## github.com/wailsapp/wails/v3 (v3.0.0-beta.34)
+## github.com/wailsapp/wails/v3 (v3.0.0)
 License: MIT
 
 MIT License
@@ -255,7 +255,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## Wails bundled go-common-file-dialog (Windows) (v3.0.0-beta.34)
+## Wails bundled go-common-file-dialog (Windows) (v3.0.0)
 License: MIT
 
 MIT License
@@ -280,7 +280,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Wails bundled WebView2Loader (Windows) (v3.0.0-beta.34)
+## Wails bundled WebView2Loader (Windows) (v3.0.0)
 License: ISC
 
 ISC License (ISC)
@@ -302,7 +302,7 @@ PERFORMANCE OF THIS SOFTWARE.
 
 ## Frontend production code
 
-## @lucide/svelte (1.61.0)
+## @lucide/svelte (1.62.0)
 License: ISC
 
 ISC License
@@ -349,7 +349,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## @wailsio/runtime (3.0.0-beta.34)
+## @wailsio/runtime (3.0.0)
 License: MIT (Wails v3 root LICENSE)
 
 MIT License
@@ -476,7 +476,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-## svelte (5.57.2)
+## svelte (5.57.3)
 License: MIT
 
 Copyright (c) 2016-2025 [Svelte Contributors](https://github.com/sveltejs/svelte/graphs/contributors)
@@ -517,7 +517,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-## Wails internal/assetserver/ringqueue.go (v3.0.0-beta.34)
+## Wails internal/assetserver/ringqueue.go (v3.0.0)
 License: MIT
 
 The MIT License (MIT)
@@ -542,7 +542,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Wails pkg/w32 derived from AllenDang/w32 (v3.0.0-beta.34)
+## Wails pkg/w32 derived from AllenDang/w32 (v3.0.0)
 License: BSD 3-Clause
 
 Copyright (c) 2010-2012 The w32 Authors. All rights reserved.
@@ -567,7 +567,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## Wails pkg/w32 derived from Winc (v3.0.0-beta.34)
+## Wails pkg/w32 derived from Winc (v3.0.0)
 License: MIT
 
 The Wails source files also carry these notices:
@@ -660,7 +660,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## @wailsio/runtime dist/nanoid.js (v3.0.0-beta.34; nanoid)
+## @wailsio/runtime dist/nanoid.js (v3.0.0; nanoid)
 License: MIT
 
 The MIT License (MIT)
@@ -684,7 +684,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-## @wailsio/runtime dist/callable.js (v3.0.0-beta.34; is-callable)
+## @wailsio/runtime dist/callable.js (v3.0.0; is-callable)
 License: MIT
 
 The MIT License (MIT)
@@ -709,7 +709,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## @wailsio/runtime dist/utils.js (v3.0.0-beta.34; HTMX-derived code)
+## @wailsio/runtime dist/utils.js (v3.0.0; HTMX-derived code)
 License: BSD 2-Clause
 
 This technique for proper load detection is taken from HTMX:
