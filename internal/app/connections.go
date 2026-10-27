@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -110,20 +111,29 @@ func (c *Connections) ChooseIdentityFile() (string, error) {
 
 // ConfirmDelete asks in a native dialog and reports whether the user chose
 // Delete. Show returns before the dialog closes, so the answer arrives through
-// the button callbacks. Delete is the default as in Finder's own delete
-// alerts; Escape triggers Cancel.
+// the button callbacks. Delete is the default on macOS and Windows; Linux
+// warning dialogs style it as destructive instead. Escape triggers Cancel.
 func (c *Connections) ConfirmDelete(names []string) bool {
 	title := fmt.Sprintf("Delete %d connections?", len(names))
 	if len(names) == 1 {
 		title = fmt.Sprintf("Delete %q?", names[0])
 	}
 	answer := make(chan bool, 1)
-	dialog := c.app.Dialog.Warning().
-		SetTitle(title).
+	dialog := c.app.Dialog.Warning()
+	if runtime.GOOS == "windows" {
+		// Wails only preserves custom button labels and callbacks on Windows
+		// question dialogs; warning dialogs become an OK-only message box.
+		dialog = c.app.Dialog.Question()
+	}
+	dialog.SetTitle(title).
 		SetMessage("This cannot be undone.").
 		AttachToWindow(c.app.Window.Current())
-	dialog.AddButton("Cancel").SetAsCancel().OnClick(func() { answer <- false })
-	dialog.AddButton("Delete").SetAsDefault().OnClick(func() { answer <- true })
+	cancel := dialog.AddButton("Cancel").SetAsCancel().OnClick(func() { answer <- false })
+	deleteButton := dialog.AddButton("Delete").SetAsDefault().OnClick(func() { answer <- true })
+	if runtime.GOOS == "darwin" {
+		// Wails reverses the configured button order on macOS.
+		dialog.AddButtons([]*application.Button{deleteButton, cancel})
+	}
 	dialog.Show()
 	// A dialog left open this long is treated as cancelled; a later click then
 	// lands in the buffered channel and is ignored.
