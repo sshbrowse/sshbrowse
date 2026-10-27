@@ -1049,6 +1049,9 @@
   }
 
   function edit(connection: Connection) {
+    if (modalDialogOpen() || scanningImport) {
+      return;
+    }
     closeBroadcastBar(false);
     rememberDialogFocus();
     bookmarkingSessionId = null;
@@ -1056,6 +1059,9 @@
   }
 
   function bookmark(sessionId: number) {
+    if (modalDialogOpen() || scanningImport) {
+      return;
+    }
     const session = sessions.find((candidate) => candidate.id === sessionId);
     if (session?.connection) {
       closeBroadcastBar(false);
@@ -1535,18 +1541,19 @@
     scanningImport = true;
     try {
       const scan = await scanSSHConfig();
-      if (firstRun && !scan.shouldPrompt) {
+      if (modalDialogOpen() || (firstRun && !scan.shouldPrompt)) {
         return;
       }
       closeBroadcastBar(false);
       rememberDialogFocus();
       importing = { scan, firstRun };
     } catch (err) {
-      if (!firstRun) {
+      if (!firstRun && !modalDialogOpen()) {
         closeBroadcastBar(false);
         rememberDialogFocus();
         importing = { scan: emptySSHConfigScan(), firstRun: false, initialError: String(err) };
       } else {
+        // Preserve a newer modal and its focus; suppressed scan errors remain in the console.
         console.error(err);
       }
     } finally {
