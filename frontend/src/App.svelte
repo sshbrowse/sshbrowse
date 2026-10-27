@@ -254,9 +254,11 @@
   let terminalSearchRequest = $state(0);
   let terminalSearchSessionId = $state<number | null>(null);
   let broadcastBarOpen = $state(false);
+  let broadcastBar = $state<{ dismissConfirmation: () => void } | null>(null);
   let broadcastSending = $state(false);
   let broadcastConfirming = $state(false);
   let terminalPasteConfirmingSessionId = $state<number | null>(null);
+  let terminalPasteConfirmationDismiss: (() => void) | null = null;
   let terminalPasteWarningsDisabled = $state(false);
   let interfaceScale = $state(interfaceScaleDefault);
   // Menus can take focus before invoking zoom, so remember the last content area.
@@ -462,6 +464,9 @@
     const generationError = liveBroadcastPasteGenerationError(capturedGeneration, liveBroadcastGeneration);
     if (generationError !== null) {
       return generationError;
+    }
+    if (modalDialogOpen()) {
+      return "Close the open dialog before pasting into a terminal.";
     }
     if (recipientCount === null) {
       return null;
@@ -928,6 +933,18 @@
     }
   }
 
+  function handleTerminalPasteConfirmationChange(
+    sessionId: number,
+    confirming: boolean,
+    dismiss?: () => void,
+  ) {
+    if (!confirming && terminalPasteConfirmingSessionId !== sessionId) {
+      return;
+    }
+    terminalPasteConfirmingSessionId = confirming ? sessionId : null;
+    terminalPasteConfirmationDismiss = confirming ? dismiss ?? null : null;
+  }
+
   function handleMenuCloseTab() {
     if (workspaceDialogOpen) {
       workspaceDialog?.dismiss();
@@ -935,6 +952,10 @@
       closeSettings();
     } else if (closeConfirmation) {
       closeConfirmationDialog?.dismiss();
+    } else if (broadcastConfirming) {
+      broadcastBar?.dismissConfirmation();
+    } else if (terminalPasteConfirmingSessionId !== null) {
+      terminalPasteConfirmationDismiss?.();
     } else if (importing) {
       importDialog?.dismiss();
     } else if (moving) {
@@ -970,11 +991,11 @@
   }
 
   function requestClose(target: CloseTarget) {
+    if (modalDialogOpen()) {
+      return;
+    }
     if (liveBroadcast !== null) {
       stopLiveBroadcast("Live broadcast stopped because a session action was opened.");
-    }
-    if (closeConfirmation !== null) {
-      return;
     }
     const targetSessions = sessionsForCloseTarget(target);
     if (targetSessions.length === 0) {
@@ -2016,6 +2037,7 @@
     {/each}
     {#if broadcastBarOpen}
       <BroadcastBar
+        bind:this={broadcastBar}
         {sessions}
         {tabs}
         {displayLabels}
@@ -2154,7 +2176,7 @@
               getBroadcastPasteState={getLiveBroadcastPasteState}
               pasteWarningsDisabled={terminalPasteWarningsDisabled}
               validatepaste={validateTerminalPaste}
-              onpasteconfirmationchange={(confirming) => (terminalPasteConfirmingSessionId = confirming ? session.id : null)}
+              onpasteconfirmationchange={(confirming, dismiss) => handleTerminalPasteConfirmationChange(session.id, confirming, dismiss)}
               onpastewarningschange={setTerminalPasteWarningsDisabled}
               onfocus={() => selectSession(session.id)}
               onclose={() => requestClose({ kind: "session", id: session.id })}

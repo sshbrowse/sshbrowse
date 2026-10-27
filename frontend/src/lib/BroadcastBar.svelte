@@ -192,6 +192,12 @@
     }
   }
 
+  export function dismissConfirmation() {
+    if (commandConfirmation !== null) {
+      finishConfirmation(false);
+    }
+  }
+
   function isSendShortcut(event: KeyboardEvent): boolean {
     if (event.key !== "Enter" || event.shiftKey || event.altKey) {
       return false;
