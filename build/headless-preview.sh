@@ -27,14 +27,26 @@ case "${1:-}" in
 
     weston_pid=""
     app_pid=""
+    stop_child() {
+      local pid="$1"
+      local attempt
+      kill "$pid" 2>/dev/null || true
+      for ((attempt = 0; attempt < 150; attempt++)); do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 0.1
+      done
+      if kill -0 "$pid" 2>/dev/null; then
+        kill -KILL "$pid" 2>/dev/null || true
+      fi
+      wait "$pid" 2>/dev/null || true
+    }
     cleanup() {
+      trap '' INT TERM
       if [[ -n "$app_pid" ]]; then
-        kill "$app_pid" 2>/dev/null || true
-        wait "$app_pid" 2>/dev/null || true
+        stop_child "$app_pid"
       fi
       if [[ -n "$weston_pid" ]]; then
-        kill "$weston_pid" 2>/dev/null || true
-        wait "$weston_pid" 2>/dev/null || true
+        stop_child "$weston_pid"
       fi
       rm -rf -- "$runtime_dir"
     }
