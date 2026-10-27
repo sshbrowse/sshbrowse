@@ -90,14 +90,18 @@ func (g *QuitGuard) confirmForRestart(decided func(bool)) {
 		SetTitle("Restart SSHBrowse?").
 		SetMessage(message).
 		AttachToWindow(g.app.Window.Current())
-	dialog.AddButton("No").SetAsCancel().SetAsDefault().OnClick(func() {
+	no := dialog.AddButton("No").SetAsCancel().OnClick(func() {
 		g.asking.Store(false)
 		decided(false)
 	})
-	dialog.AddButton("Yes").OnClick(func() {
+	yes := dialog.AddButton("Yes").SetAsDefault().OnClick(func() {
 		g.asking.Store(false)
 		decided(true)
 	})
+	if runtime.GOOS == "darwin" {
+		// Wails reverses the configured button order on macOS.
+		dialog.AddButtons([]*application.Button{yes, no})
+	}
 	dialog.Show()
 }
 
