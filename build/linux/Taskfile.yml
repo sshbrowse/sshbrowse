@@ -53,6 +53,15 @@ tasks:
     summary: Packages the application as a DEB and RPM
     platforms: [linux]
     deps:
+      - task: check:package-architecture
+    cmds:
+      - task: package:formats
+        vars:
+          RELEASE: '{{.RELEASE | default "false"}}'
+
+  package:formats:
+    internal: true
+    deps:
       - task: create:deb
         vars:
           RELEASE: '{{.RELEASE | default "false"}}'
@@ -63,12 +72,20 @@ tasks:
   release:
     summary: Builds the Linux release artifacts
     platforms: [linux]
-    deps:
+    cmds:
+      - task: check:package-architecture
       - task: package
         vars:
           RELEASE: "true"
-    cmds:
       - install -m 0755 "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/SSHBrowse-Linux-x86_64"
+
+  check:package-architecture:
+    summary: Requires amd64 for Linux packages and release artifacts
+    internal: true
+    platforms: [linux]
+    preconditions:
+      - sh: 'test "{{.ARCH | default ARCH}}" = "amd64"'
+        msg: "Linux packages and release artifacts support ARCH=amd64 only (requested {{.ARCH | default ARCH}})"
 
   prepare:package:
     summary: Builds the Linux binary and desktop metadata shared by package formats
@@ -84,11 +101,11 @@ tasks:
   create:deb:
     summary: Creates the Wails DEB package
     platforms: [linux]
-    deps:
+    cmds:
+      - task: check:package-architecture
       - task: prepare:package
         vars:
           RELEASE: '{{.RELEASE | default "false"}}'
-    cmds:
       - |
         set -euo pipefail
         config="$(mktemp "build/linux/nfpm/sshbrowse.XXXXXX.yaml")"
@@ -107,11 +124,11 @@ tasks:
   create:rpm:
     summary: Creates the Wails RPM package
     platforms: [linux]
-    deps:
+    cmds:
+      - task: check:package-architecture
       - task: prepare:package
         vars:
           RELEASE: '{{.RELEASE | default "false"}}'
-    cmds:
       - |
         set -euo pipefail
         config="$(mktemp "build/linux/nfpm/sshbrowse.XXXXXX.yaml")"
