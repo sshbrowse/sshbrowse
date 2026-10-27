@@ -159,7 +159,7 @@
       broadcastGeneration: number,
       broadcastRecipientCount: number | null,
     ) => string | null;
-    onpasteconfirmationchange: (confirming: boolean) => void;
+    onpasteconfirmationchange: (confirming: boolean, dismiss?: () => void) => void;
     onpastewarningschange: (disabled: boolean) => void;
     onfocus: () => void;
     onclose: () => void;
@@ -387,7 +387,7 @@
       broadcastRecipientCount: targetBroadcastState.recipientCount,
       text,
     };
-    onpasteconfirmationchange(true);
+    onpasteconfirmationchange(true, () => finishPasteConfirmation(null, false));
   }
 
   function finishPasteConfirmation(text: string | null, disableWarnings: boolean) {
