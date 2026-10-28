@@ -840,7 +840,7 @@
   }
 
   function openTab(connection: Connection | null, autofocus = true, useTiling = tilingMode) {
-    openSession(connection, "ssh", autofocus, useTiling);
+    return openSession(connection, "ssh", autofocus, useTiling);
   }
 
   function openSFTP(connection: Connection) {
@@ -876,13 +876,13 @@
       stopLiveBroadcast("Live broadcast stopped because another session was opened.");
     }
     if (closeConfirmation !== null) {
-      return;
+      return false;
     }
     const placement = placeNewSession(tabs, activeId, nextSessionId, useTiling, nextTabId);
     // Joining a workspace never counts; only a new tab can exceed the limit.
     if (placement.tabs.length > maximumTabs) {
       operationError = `No more than ${maximumTabs} tabs can be open.`;
-      return;
+      return false;
     }
     operationError = "";
     // The session keeps its own copy; editing the saved connection later does not change it.
@@ -898,6 +898,7 @@
     tabs = placement.tabs;
     activeId = placement.activeId;
     nextTabId = placement.nextTabId;
+    return true;
   }
 
   // Removing sessions unmounts their panes, which closes their processes.

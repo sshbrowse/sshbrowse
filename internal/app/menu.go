@@ -29,6 +29,7 @@ const (
 	EventMenuTerminalPaste       = "menu:terminalPaste"
 	EventMenuFindTerminal        = "menu:findTerminal"
 	EventMenuTerminalSearch      = "menu:terminalSearch"
+	EventMenuConnectionNewTab    = "menu:connectionOpenNewTab"
 	EventMenuConnectionOpen      = "menu:connectionOpen"
 	EventMenuConnectionEdit      = "menu:connectionEdit"
 	EventMenuConnectionDuplicate = "menu:connectionDuplicate"

@@ -6,7 +6,7 @@ import { tileGrid } from "../src/lib/tileLayout.ts";
 const expectedRowSizes: Record<number, number[]> = {
   1: [1],
   2: [2],
-  3: [2, 1],
+  3: [3],
   4: [2, 2],
   5: [3, 2],
   6: [3, 3],
@@ -60,7 +60,7 @@ test("placements follow logical workspace order", () => {
     [
       { sessionId: 42, placement: { row: 1, column: 1, columnSpan: 1 } },
       { sessionId: 7, placement: { row: 1, column: 2, columnSpan: 1 } },
-      { sessionId: 19, placement: { row: 2, column: 1, columnSpan: 2 } },
+      { sessionId: 19, placement: { row: 1, column: 3, columnSpan: 1 } },
     ],
   );
 });

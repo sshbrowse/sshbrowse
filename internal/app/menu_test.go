@@ -49,6 +49,7 @@ func TestLinuxAndWindowsUseFrontendMenuAndRegisterContextMenus(t *testing.T) {
 		label string
 	}{
 		{menu: "saved-connection", label: "Connect"},
+		{menu: "saved-connection", label: "Connect in New Tab"},
 		{menu: "saved-connection", label: "Connect with SFTP"},
 		{menu: "saved-connection", label: "Edit…"},
 		{menu: "saved-connection", label: "Duplicate…"},
@@ -75,6 +76,19 @@ func TestLinuxAndWindowsUseFrontendMenuAndRegisterContextMenus(t *testing.T) {
 	for _, label := range []string{"Connect", "Connect all"} {
 		if emptyFolderMenu.FindByLabel(label) != nil {
 			t.Fatalf("empty folder menu must hide %q", label)
+		}
+	}
+}
+
+func TestConnectionMenuOpeningActions(t *testing.T) {
+	want := []sidebarMenuItem{
+		{"Connect", EventMenuConnectionOpen},
+		{"Connect in New Tab", EventMenuConnectionNewTab},
+		{"Connect with SFTP", EventMenuConnectionSFTP},
+	}
+	for i, item := range want {
+		if got := sidebarMenuItems["saved-connection"][i]; got != item {
+			t.Fatalf("opening action %d = %v, want %v", i, got, item)
 		}
 	}
 }
