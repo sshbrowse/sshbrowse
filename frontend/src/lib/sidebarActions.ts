@@ -30,6 +30,19 @@ export function actionConnections(
   return connections.filter((connection) => wanted.has(connection.id));
 }
 
+export function openConnectionsInNewTab(
+  connections: readonly Connection[],
+  open: (connection: Connection, autofocus: boolean, useTiling?: boolean) => boolean,
+): void {
+  for (const [index, connection] of connections.entries()) {
+    // Start outside the active workspace, then follow the global tiling mode.
+    // A rejected first tab must not let later sessions join the existing workspace.
+    if (!open(connection, connections.length === 1, index === 0 ? false : undefined)) {
+      break;
+    }
+  }
+}
+
 export function validDropFolder(
   payload: SidebarDragPayload,
   candidate: string | undefined,
