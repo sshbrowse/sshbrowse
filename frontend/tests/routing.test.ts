@@ -70,15 +70,24 @@ test("tiling fills the active workspace and starts another after nine", () => {
   });
 });
 
-test("disabled tiling always creates an ordinary tab", () => {
-  const placement = placeNewSession(
+test("explicit standalone placement leaves a workspace intact across multiple opens", () => {
+  let placement = placeNewSession(
     [{ id: 1, kind: "workspace", sessionIds: [1, 2], selectedSessionId: 2 }],
     1,
     3,
     false,
     2,
   );
-  assert.deepEqual(placement.tabs[1], { id: 2, kind: "session", sessionId: 3 });
+  const workspace = placement.tabs[0];
+  placement = placeNewSession(placement.tabs, placement.activeId, 4, false, placement.nextTabId);
+  assert.deepEqual(placement.tabs, [
+    { id: 1, kind: "workspace", sessionIds: [1, 2], selectedSessionId: 2 },
+    { id: 2, kind: "session", sessionId: 3 },
+    { id: 3, kind: "session", sessionId: 4 },
+  ]);
+  assert.equal(placement.tabs[0], workspace);
+  assert.equal(placement.activeId, 3);
+  assert.equal(placement.nextTabId, 4);
 });
 
 test("recipient routing follows scope, labels duplicates, and disables unavailable sessions", () => {

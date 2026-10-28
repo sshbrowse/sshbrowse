@@ -25,6 +25,7 @@ type sidebarMenuItem struct {
 var sidebarMenuItems = map[string][]sidebarMenuItem{
 	"saved-connection": {
 		{"Connect", EventMenuConnectionOpen},
+		{"Connect in New Tab", EventMenuConnectionNewTab},
 		{"Connect with SFTP", EventMenuConnectionSFTP},
 		{"Edit…", EventMenuConnectionEdit},
 		{"Duplicate…", EventMenuConnectionDuplicate},

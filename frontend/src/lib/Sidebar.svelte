@@ -77,7 +77,7 @@
     connections: Connection[];
     folders: string[];
     canpaste: boolean;
-    onopen: (connection: Connection, autofocus?: boolean) => void;
+    onopen: (connection: Connection, autofocus?: boolean, useTiling?: boolean) => void;
     onopensftp: (connection: Connection) => void;
     onedit: (connection: Connection) => void;
     onduplicate: (connection: Connection) => void;
@@ -625,6 +625,10 @@
       const targets = targetsFor(event.data);
       targets.forEach((connection) => onopen(connection, targets.length === 1));
     });
+    const offOpenNewTab = Events.On("menu:connectionOpenNewTab", (event: { data: string }) => {
+      const targets = targetsFor(event.data);
+      targets.forEach((connection) => onopen(connection, targets.length === 1, false));
+    });
     const offSFTP = Events.On("menu:connectionSFTP", (event: { data: string }) => targetsFor(event.data).forEach(onopensftp));
     const offEdit = Events.On("menu:connectionEdit", (event: { data: string }) => actOnConnection(event.data, onedit));
     const offDuplicate = Events.On("menu:connectionDuplicate", (event: { data: string }) => actOnConnection(event.data, onduplicate));
@@ -655,6 +659,7 @@
     window.addEventListener("resize", updateViewportWidth);
     return () => {
       offOpen();
+      offOpenNewTab();
       offSFTP();
       offEdit();
       offDuplicate();
