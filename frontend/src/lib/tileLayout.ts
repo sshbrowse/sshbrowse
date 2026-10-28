@@ -29,7 +29,7 @@ export function tileGrid(count: number): TileGrid {
     return { columns: 0, rows: 0, placements: [] };
   }
 
-  const columnsPerRow = Math.ceil(Math.sqrt(normalizedCount));
+  const columnsPerRow = normalizedCount <= 3 ? normalizedCount : Math.ceil(Math.sqrt(normalizedCount));
   const rows = Math.ceil(normalizedCount / columnsPerRow);
   const rowSizes: number[] = [];
   const baseRowSize = Math.floor(normalizedCount / rows);
