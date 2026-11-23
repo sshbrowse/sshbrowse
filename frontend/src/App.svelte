@@ -76,7 +76,7 @@
     type UpdateInfo,
     type EditMenuAction,
   } from "./lib/menuEvents";
-  import { createBroadcastSender, placeNewSession, type BroadcastSnapshot } from "./lib/routing";
+  import { broadcastRecipients, createBroadcastSender, placeNewSession } from "./lib/routing";
   import {
     createLiveBroadcastWriter,
     liveBroadcastLayoutInvalidationReason,
@@ -120,6 +120,7 @@
     type SessionCloseErrorNotice,
   } from "./lib/sessionLogging";
   import {
+    loadBroadcastMode,
     loadPreferences,
     normalizeTerminalScrollback,
     terminalScrollbackDefault,
@@ -131,6 +132,7 @@
     interfaceScaleStep,
     sidebarDefaultWidth,
     sidebarMinimumWidth,
+    type BroadcastMode,
     type PreferenceKey,
     type UiSize,
   } from "./lib/storage";
@@ -172,6 +174,7 @@
   let activeWorkspace = $derived(activeTab?.kind === "workspace" ? activeTab : null);
   let activeTileGrid = $derived(activeWorkspace ? tileGrid(activeWorkspace.sessionIds.length) : null);
   let displayLabels = $derived(sessionDisplayLabels(sessions));
+  const currentBroadcastRecipients = $derived(broadcastRecipients(sessions, activeTab, displayLabels));
   let recordingSession = $derived(sessions.find((session) => session.id === focusedSessionId(tabs, activeId)));
   let recordingCanStart = $derived(!modalDialogOpen() && recordingSession?.loggingControl?.canStart === true);
   let recordingCanStop = $derived(!modalDialogOpen() && recordingSession?.loggingControl?.canStop === true);
@@ -255,6 +258,7 @@
   let terminalSearchRequest = $state(0);
   let terminalSearchSessionId = $state<number | null>(null);
   let broadcastBarOpen = $state(false);
+  let broadcastMode = $state<BroadcastMode>("command");
   let broadcastBar = $state<{ dismissConfirmation: () => void } | null>(null);
   let broadcastSending = $state(false);
   let broadcastConfirming = $state(false);
@@ -428,16 +432,13 @@
     writer?.stop(reason);
   }
 
-  function startLiveBroadcast(snapshot: BroadcastSnapshot[]): string | null {
+  function startLiveBroadcast(): string | null {
     liveBroadcastError = "";
+    const snapshot = currentBroadcastRecipients;
     const focusedId = focusedSessionId(tabs, activeId);
     const setupError = liveBroadcastStartError(snapshot, focusedId);
     if (setupError !== null) {
       return setupError;
-    }
-    const validityError = liveBroadcastSnapshotInvalidationReason(snapshot, sessions, focusedId);
-    if (validityError !== null) {
-      return validityError;
     }
 
     const capturedSnapshot = snapshot.map((target) => ({ ...target }));
@@ -581,6 +582,8 @@
       : liveBroadcastSnapshotInvalidationReason(liveBroadcast.snapshot, sessions, focusedSessionId(tabs, activeId));
     if (reason !== null) {
       stopLiveBroadcast(reason);
+    } else if (currentBroadcastRecipients.length !== liveBroadcast.snapshot.length) {
+      stopLiveBroadcast("Live input stopped because the live terminals in this tab changed.");
     }
   });
 
@@ -819,6 +822,11 @@
     }
   }
 
+  function setBroadcastMode(mode: BroadcastMode) {
+    broadcastMode = mode;
+    persistPreference(preferenceKeys.broadcastMode, mode);
+  }
+
   function closeBroadcastBar(restoreTerminalFocus = true) {
     if (liveBroadcast !== null) {
       stopLiveBroadcast("Live broadcast stopped because another action opened.");
@@ -897,7 +905,7 @@
     };
     sessions.push(session);
     tabs = placement.tabs;
-    activeId = placement.activeId;
+    activateTab(placement.activeId);
     nextTabId = placement.nextTabId;
     return true;
   }
@@ -909,7 +917,7 @@
 
   function applyTabLayout(nextTabs: Tab[]) {
     if (liveBroadcast !== null) {
-      const reason = liveBroadcastLayoutInvalidationReason(liveBroadcast.snapshot, tabs, nextTabs);
+      const reason = liveBroadcastLayoutInvalidationReason(activeId, tabs, nextTabs);
       if (reason !== null) {
         // Stop and discard queued input before the new layout can receive input.
         stopLiveBroadcast(reason);
@@ -921,7 +929,7 @@
   function applyWorkspaceState(state: WorkspaceState<AppSession>) {
     applyTabLayout(state.tabs);
     sessions = state.sessions;
-    activeId = state.activeId;
+    activateTab(state.activeId);
   }
 
   function closeTab(id: number) {
@@ -1046,7 +1054,7 @@
     const next = selectSessionState(tabs, sessionId);
     if (next) {
       applyTabLayout(next.tabs);
-      activeId = next.activeId;
+      activateTab(next.activeId);
     }
   }
 
@@ -1054,7 +1062,7 @@
     const next = tileTabState(tabs, sourceTabId, targetTabId, nextTabId);
     if (next) {
       applyTabLayout(next.tabs);
-      activeId = next.activeId;
+      activateTab(next.activeId);
       nextTabId = next.nextTabId;
     }
   }
@@ -1063,15 +1071,22 @@
     const next = detachSessionState(tabs, sessionId, nextTabId);
     if (next) {
       applyTabLayout(next.tabs);
-      activeId = next.activeId;
+      activateTab(next.activeId);
       nextTabId = next.nextTabId;
     }
+  }
+
+  function activateTab(id: number | null) {
+    if (id !== activeId && liveBroadcast !== null) {
+      stopLiveBroadcast("Live input stopped because you switched tabs.");
+    }
+    activeId = id;
   }
 
   function selectIndex(index: number) {
     const next = selectTabAt(tabs, index);
     if (next !== null) {
-      activeId = next;
+      activateTab(next);
       terminalFocusRequest++;
     }
   }
@@ -1079,7 +1094,7 @@
   function step(delta: number) {
     const next = stepTab(tabs, activeId, delta);
     if (next !== null) {
-      activeId = next;
+      activateTab(next);
       terminalFocusRequest++;
     }
   }
@@ -1600,6 +1615,7 @@
   function reloadPreferences() {
     try {
       const preferences = loadPreferences(localStorage);
+      broadcastMode = loadBroadcastMode(localStorage);
       sidebarWidth = preferences.sidebarWidth;
       sidebarVisible = preferences.sidebarVisible;
       tilingMode = preferences.tilingMode;
@@ -1943,7 +1959,7 @@
             recordingIndicator={sessionLoggingControl}
             {sessionMenu}
             isRecording={sessionIsRecording}
-            onselect={(id) => (activeId = id)}
+            onselect={activateTab}
             onclose={(id) => requestClose({ kind: "tab", id })}
             onbookmark={bookmark}
             onnew={(shiftKey) => openPicker(shiftKey)}
@@ -2001,7 +2017,7 @@
         recordingIndicator={sessionLoggingControl}
         {sessionMenu}
         isRecording={sessionIsRecording}
-        onselect={(id) => (activeId = id)}
+        onselect={activateTab}
         onclose={(id) => requestClose({ kind: "tab", id })}
         onbookmark={bookmark}
         onnew={(shiftKey) => openPicker(shiftKey)}
@@ -2060,10 +2076,11 @@
     {#if broadcastBarOpen}
       <BroadcastBar
         bind:this={broadcastBar}
-        {sessions}
-        {tabs}
-        {displayLabels}
+        recipients={currentBroadcastRecipients}
         {activeId}
+        focusedId={focusedSessionId(tabs, activeId)}
+        mode={broadcastMode}
+        onmodechange={setBroadcastMode}
         enabled={!modalDialogOpen()}
         {liveBroadcast}
         broadcastError={liveBroadcastError}

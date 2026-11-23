@@ -21,10 +21,10 @@ export function liveBroadcastStartError(
   focusedSessionId: number | null,
 ): string | null {
   if (snapshot.length < 2) {
-    return "Select at least two live sessions to start live broadcasting.";
+    return "Live input needs at least two live terminals in this tab.";
   }
   if (focusedSessionId === null || !snapshot.some((target) => target.logicalSessionId === focusedSessionId)) {
-    return "The focused terminal session must be selected for live broadcasting.";
+    return "Focus a live terminal in this tab to start live input.";
   }
   return null;
 }
@@ -55,23 +55,20 @@ export function liveBroadcastSnapshotInvalidationReason(
 
 // Selection and tab order do not change a broadcast's layout context.
 export function liveBroadcastLayoutInvalidationReason(
-  snapshot: readonly BroadcastSnapshot[],
+  activeTabId: number | null,
   previousTabs: readonly Tab[],
   nextTabs: readonly Tab[],
 ): string | null {
-  for (const target of snapshot) {
-    const previous = previousTabs.find((tab) => sessionIds(tab).includes(target.logicalSessionId));
-    const next = nextTabs.find((tab) => sessionIds(tab).includes(target.logicalSessionId));
-    if (previous === undefined || next === undefined || previous.id !== next.id || previous.kind !== next.kind) {
-      return "Live broadcast stopped because the terminal layout changed. Start a new broadcast to continue.";
-    }
+  const previous = previousTabs.find((tab) => tab.id === activeTabId);
+  const next = nextTabs.find((tab) => tab.id === activeTabId);
+  if (previous !== undefined && next !== undefined && previous.kind === next.kind) {
     const previousIds = sessionIds(previous);
     const nextIds = sessionIds(next);
-    if (previousIds.length !== nextIds.length || previousIds.some((id) => !nextIds.includes(id))) {
-      return "Live broadcast stopped because the terminal layout changed. Start a new broadcast to continue.";
+    if (previousIds.length === nextIds.length && previousIds.every((id) => nextIds.includes(id))) {
+      return null;
     }
   }
-  return null;
+  return "Live broadcast stopped because the terminal layout changed. Start a new broadcast to continue.";
 }
 
 export function liveBroadcastPasteError(

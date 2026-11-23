@@ -2,16 +2,17 @@
   let {
     lineCount,
     byteCount,
-    recipientCount,
+    recipientLabels,
     preview,
     onclose,
   }: {
     lineCount: number;
     byteCount: number;
-    recipientCount: number;
+    recipientLabels: string[];
     preview: string;
     onclose: (confirmed: boolean) => void;
   } = $props();
+  const recipientCount = $derived(recipientLabels.length);
 
   let dialog: HTMLDialogElement;
 
@@ -31,21 +32,21 @@
 <dialog bind:this={dialog} onclose={() => onclose(dialog.returnValue === "confirm")} aria-labelledby="broadcast-confirm-heading">
   <form method="dialog">
     <header>
-      <h2 id="broadcast-confirm-heading">Confirm command send</h2>
+      <h2 id="broadcast-confirm-heading">Review command</h2>
     </header>
     <div class="body">
-      <p>Send {lineCount} command lines to {recipientCount} session{recipientCount === 1 ? "" : "s"}?</p>
+      <p>Send to {recipientLabels.join(", ")}?</p>
       <dl>
         <div><dt>Bytes</dt><dd>{byteCount.toLocaleString()}</dd></div>
         <div><dt>Lines</dt><dd>{lineCount}</dd></div>
       </dl>
       <pre aria-label="Command preview">{preview}</pre>
-      <p class="warning">Only send when every selected session is at a command prompt.</p>
+      <p class="warning">This sends the text as keyboard input. Make sure each shell is waiting for a fresh command.</p>
     </div>
     <footer>
       <button type="button" onclick={closeWithoutSending}>Cancel</button>
       <!-- svelte-ignore a11y_autofocus -- Enter should confirm this deliberate staged send. -->
-      <button type="submit" value="confirm" class="primary" autofocus>Send</button>
+      <button type="submit" value="confirm" class="primary" autofocus>Send to {recipientCount}</button>
     </footer>
   </form>
 </dialog>
@@ -97,6 +98,7 @@
     margin: 0;
     color: var(--text-secondary);
     line-height: 1.45;
+    overflow-wrap: anywhere;
   }
   dl {
     display: flex;

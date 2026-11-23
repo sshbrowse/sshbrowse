@@ -2,6 +2,7 @@ import { defaultCustomPalette } from "../src/lib/customPalette.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  loadBroadcastMode,
   loadPreferences,
   normalizeTerminalScrollback,
   preferenceKeys,
@@ -118,6 +119,17 @@ test("older theme preferences keep following the interface", () => {
   assert.equal(loadPreferences(preferences).terminalColors, "neutral");
   savePreference(preferences, preferenceKeys.terminalColors, "follow");
   assert.equal(loadPreferences(preferences).terminalColors, "follow");
+});
+
+test("broadcast remembers the last mode and defaults to Command for unknown values", () => {
+  const preferences = storage();
+  assert.equal(loadBroadcastMode(preferences), "command");
+  savePreference(preferences, preferenceKeys.broadcastMode, "live");
+  assert.equal(loadBroadcastMode(preferences), "live");
+  savePreference(preferences, preferenceKeys.broadcastMode, "command");
+  assert.equal(loadBroadcastMode(preferences), "command");
+  savePreference(preferences, preferenceKeys.broadcastMode, "unknown");
+  assert.equal(loadBroadcastMode(preferences), "command");
 });
 
 test("explicit Warm and Moss preferences survive the new default", () => {

@@ -11,7 +11,6 @@ import {
   maximumBroadcastCommandBytes,
   normalizeBroadcastCommand,
   placeNewSession,
-  snapshotBroadcastRecipients,
 } from "../src/lib/routing.ts";
 import { sessionDisplayLabels } from "../src/lib/tabs.ts";
 
@@ -90,29 +89,29 @@ test("explicit standalone placement leaves a workspace intact across multiple op
   assert.equal(placement.nextTabId, 4);
 });
 
-test("recipient routing follows scope, labels duplicates, and disables unavailable sessions", () => {
+test("broadcast includes every live terminal in the current tab", () => {
   const sessions = [
     session(1, "web", "live", 101),
     session(2, "web", "closed", null),
     session(3, "db", "connecting", 103),
+    session(4, "cache", "live", 104),
+    session(5, "logs", "live", 105),
+    session(6, "starting", "live", null),
   ];
   const tabs = [
-    { id: 10, kind: "workspace" as const, sessionIds: [1, 2], selectedSessionId: 1 },
-    { id: 11, kind: "session" as const, sessionId: 3 },
+    { id: 10, kind: "workspace" as const, sessionIds: [1, 2, 3, 4, 6], selectedSessionId: 1 },
+    { id: 11, kind: "session" as const, sessionId: 5 },
   ];
 
-  const current = broadcastRecipients(sessions, tabs, 10, "current");
-  assert.deepEqual(current.map(({ label, available }) => ({ label, available })), [
-    { label: "web (1)", available: true },
-    { label: "web (2)", available: false },
+  assert.deepEqual(broadcastRecipients(sessions, tabs[0]), [
+    { logicalSessionId: 1, processInstanceId: 101, label: "web (1)" },
+    { logicalSessionId: 4, processInstanceId: 104, label: "cache" },
   ]);
-  assert.deepEqual(broadcastRecipients(sessions, tabs, 11, "current").map((recipient) => recipient.label), ["db"]);
-  assert.equal(broadcastRecipients(sessions, tabs, null, "current").length, 0);
-  assert.equal(broadcastRecipients(sessions, tabs, 10, "all").length, 3);
-  assert.deepEqual(snapshotBroadcastRecipients(current, new Set([1])), []);
+  assert.deepEqual(broadcastRecipients(sessions, tabs[1]).map((recipient) => recipient.label), ["logs"]);
+  assert.deepEqual(broadcastRecipients(sessions, null), []);
 });
 
-test("recipient labels stay global across scopes and tab order", () => {
+test("recipient labels stay global and recipients follow pane order", () => {
   const sessions = [
     localSession(30, "live", 130),
     localSession(10, "live", 110),
@@ -125,30 +124,19 @@ test("recipient labels stay global across scopes and tab order", () => {
   const labels = sessionDisplayLabels(sessions);
 
   assert.deepEqual(
-    broadcastRecipients(sessions, tabs, 11, "current", labels).map((recipient) => recipient.label),
+    broadcastRecipients(sessions, tabs[0], labels).map((recipient) => recipient.label),
     ["Local terminal (3)"],
   );
   assert.deepEqual(
-    broadcastRecipients(sessions, tabs, 12, "current", labels).map((recipient) => recipient.label),
+    broadcastRecipients(sessions, tabs[1], labels).map((recipient) => recipient.label),
     ["Local terminal (2)", "Local terminal (1)"],
-  );
-  assert.deepEqual(
-    broadcastRecipients(sessions, tabs, 11, "all", labels).map((recipient) => recipient.label),
-    ["Local terminal (3)", "Local terminal (2)", "Local terminal (1)"],
-  );
-  assert.deepEqual(
-    snapshotBroadcastRecipients(
-      broadcastRecipients(sessions, tabs, 11, "all", labels),
-      new Set([20]),
-    ).map((recipient) => recipient.label),
-    ["Local terminal (3)", "Local terminal (1)"],
   );
 });
 
 test("a send uses its process-instance snapshot and reports partial failures", async () => {
   const sessions = [session(1, "web", "live", 101), session(2, "db", "live", 102)];
   const tabs = [{ id: 10, kind: "workspace" as const, sessionIds: [1, 2], selectedSessionId: 1 }];
-  const snapshot = snapshotBroadcastRecipients(broadcastRecipients(sessions, tabs, 10, "current"), new Set());
+  const snapshot = broadcastRecipients(sessions, tabs[0]);
   sessions[0].processInstanceId = 201;
   const writes: Array<{ id: number; data: string }> = [];
   const sender = createBroadcastSender(async (id, data) => {
@@ -173,19 +161,16 @@ test("delivery results retain labels captured before duplicate compaction", asyn
     { id: 10, kind: "workspace" as const, sessionIds: [1, 2], selectedSessionId: 2 },
   ];
   const initialLabels = sessionDisplayLabels(initialSessions);
-  const snapshot = snapshotBroadcastRecipients(
-    broadcastRecipients(initialSessions, tabs, 10, "current", initialLabels),
-    new Set([1]),
-  );
-  assert.equal(snapshot[0].label, "web (2)");
+  const snapshot = broadcastRecipients(initialSessions, tabs[0], initialLabels);
+  assert.equal(snapshot[1].label, "web (2)");
 
   const currentSessions = [initialSessions[1]];
   const currentLabels = sessionDisplayLabels(currentSessions);
-  assert.equal(broadcastRecipients(currentSessions, tabs, 10, "current", currentLabels)[0].label, "web");
+  assert.equal(broadcastRecipients(currentSessions, tabs[0], currentLabels)[0].label, "web");
 
   const sender = createBroadcastSender(async () => {});
   const deliveries = await sender.send(snapshot, "uptime");
-  assert.equal(deliveries[0].label, "web (2)");
+  assert.equal(deliveries[1].label, "web (2)");
 });
 
 test("broadcast writes have bounded concurrency", async () => {

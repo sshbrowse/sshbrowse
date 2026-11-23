@@ -9,20 +9,10 @@ import {
 } from "./tabs.ts";
 import { boundedPreview, logicalLineCount, utf8ByteLength } from "./terminalInput.ts";
 
-export type BroadcastScope = "current" | "all";
-
 export interface SessionPlacement {
   tabs: Tab[];
   activeId: number;
   nextTabId: number;
-}
-
-export interface BroadcastRecipient {
-  logicalSessionId: number;
-  processInstanceId: number | null;
-  label: string;
-  status: Session["status"];
-  available: boolean;
 }
 
 export interface BroadcastSnapshot {
@@ -102,44 +92,19 @@ export function placeNewSession(
 }
 
 export function broadcastRecipients(
-  sessions: Session[],
-  tabs: Tab[],
-  activeId: number | null,
-  scope: BroadcastScope,
+  sessions: readonly Session[],
+  activeTab: Tab | null,
   labels: ReadonlyMap<number, string> = sessionDisplayLabels(sessions),
-): BroadcastRecipient[] {
-  const scopedTab = tabs.find((tab) => tab.id === activeId);
-  const includedIds = scope === "all"
-    ? tabs.flatMap(sessionIds)
-    : scopedTab ? sessionIds(scopedTab) : [];
+): BroadcastSnapshot[] {
+  if (activeTab === null) return [];
   const sessionsById = new Map(sessions.map((session) => [session.id, session]));
-  const includedSessions = includedIds
-    .map((id) => sessionsById.get(id))
-    .filter((session): session is Session => session !== undefined);
-
-  return includedSessions.map((session) => {
-    return {
+  return sessionIds(activeTab).flatMap((id) => {
+    const session = sessionsById.get(id);
+    if (session?.status !== "live" || session.processInstanceId === null) return [];
+    return [{
       logicalSessionId: session.id,
       processInstanceId: session.processInstanceId,
       label: sessionDisplayLabel(labels, session.id),
-      status: session.status,
-      available: session.status === "live" && session.processInstanceId !== null,
-    };
-  });
-}
-
-export function snapshotBroadcastRecipients(
-  recipients: BroadcastRecipient[],
-  excludedSessionIds: ReadonlySet<number>,
-): BroadcastSnapshot[] {
-  return recipients.flatMap((recipient) => {
-    if (!recipient.available || recipient.processInstanceId === null || excludedSessionIds.has(recipient.logicalSessionId)) {
-      return [];
-    }
-    return [{
-      logicalSessionId: recipient.logicalSessionId,
-      processInstanceId: recipient.processInstanceId,
-      label: recipient.label,
     }];
   });
 }
