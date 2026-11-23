@@ -18,10 +18,12 @@ Your system's OpenSSH handles authentication, host keys, and SSH configuration.
   **Settings > Terminal > Scrollback lines**.
 - Re-enable paste confirmations with **Settings > Terminal > Warn before pasting
   multiple lines** after choosing **Don't show these warnings again**.
-- Broadcast sends commands or live input to multiple terminals. Choose the mode
-  and use the recipient menu to select the tab scope and individual terminals.
-  Check the visible recipient count before sending. Live input requires at least
-  two live terminals, including the focused terminal; use **Stop** to end it.
+- Broadcast targets every live terminal pane in the current tab. **Command**
+  sends the text and presses Enter in each terminal. Make sure each shell is
+  waiting for a fresh command. **Live input** requires at least two live
+  terminals, including the focused pane. Switch tabs or choose **Stop live
+  input** to stop mirroring. The bar remembers the last mode you chose. Choose
+  **Start live input** each time you want to begin mirroring.
 
 ## Session logging
 

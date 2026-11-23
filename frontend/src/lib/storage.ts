@@ -4,11 +4,13 @@ import type { TerminalColors, TerminalFontName, ThemeName } from "./appearance";
 export type PreferenceStorage = Pick<Storage, "getItem" | "setItem">;
 
 export type UiSize = "standard" | "large";
+export type BroadcastMode = "command" | "live";
 
 export const preferenceKeys = {
   sidebarWidth: "sshbrowse.sidebar.width",
   sidebarVisible: "sshbrowse.sidebar.visible",
   tilingMode: "sshbrowse.tiling.enabled",
+  broadcastMode: "sshbrowse.broadcast.mode",
   rightClickToPaste: "sshbrowse.terminal.rightClickToPaste",
   copyOnSelection: "sshbrowse.terminal.copyOnSelection",
   checkUpdatesOnStartup: "sshbrowse.updates.checkOnStartup",
@@ -145,6 +147,10 @@ function readUiSize(storage: PreferenceStorage): UiSize {
 function readTerminalFontSize(storage: PreferenceStorage): number {
   const value = Number(readValue(storage, preferenceKeys.terminalFontSize));
   return Number.isInteger(value) && value >= 8 && value <= 32 ? value : 14;
+}
+
+export function loadBroadcastMode(storage: PreferenceStorage): BroadcastMode {
+  return readValue(storage, preferenceKeys.broadcastMode) === "live" ? "live" : "command";
 }
 
 export function loadPreferences(storage: PreferenceStorage): Preferences {

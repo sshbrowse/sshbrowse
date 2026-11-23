@@ -30,7 +30,7 @@ test("live broadcast requires two live targets and includes focus", () => {
   const two = [...one, target(2, 102)];
 
   assert.match(liveBroadcastStartError(one, 1) ?? "", /at least two/);
-  assert.match(liveBroadcastStartError(two, 3) ?? "", /focused terminal/);
+  assert.match(liveBroadcastStartError(two, 3) ?? "", /Focus a live terminal/);
   assert.equal(liveBroadcastStartError(two, 1), null);
 });
 
