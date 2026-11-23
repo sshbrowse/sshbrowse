@@ -46,7 +46,7 @@ jobs:
 
       - name: Install pinned govulncheck
         run: |
-          govulncheck_version=v1.9.0
+          govulncheck_version=v1.10.0
           go install "golang.org/x/vuln/cmd/govulncheck@$govulncheck_version"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           go version -m "$(go env GOPATH)/bin/govulncheck" | grep -F "golang.org/x/vuln" | grep -F "$govulncheck_version"
