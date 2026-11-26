@@ -6,7 +6,8 @@
   with **Shell > Import from SSH Config…**. Organize them in sidebar folders.
 - Double-click a saved connection, or enter `user@host:port` in the new-tab picker.
   The **Shell** menu also opens SFTP sessions and local terminals.
-- Use tabs or enable **View > Toggle Tiling Mode** to work with several panes.
+- The **+** button in the tab bar opens a new tab. Enable **View > Toggle Tiling Mode**
+  to open saved connections from the sidebar as tiles.
 - Set a saved connection or raw ProxyJump route as a jump host when needed.
 
 Your system's OpenSSH handles authentication, host keys, and SSH configuration.

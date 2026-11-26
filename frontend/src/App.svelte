@@ -1122,11 +1122,11 @@
     }
   }
 
-  function openPicker(shiftKey = false) {
+  function openPicker(useTiling = tilingMode) {
     if (!modalDialogOpen() && !scanningImport) {
       closeBroadcastBar(false);
       rememberDialogFocus();
-      pickerTilingMode = shiftKey ? !tilingMode : tilingMode;
+      pickerTilingMode = useTiling;
       picking = true;
     }
   }
@@ -1954,15 +1954,13 @@
             {sessions}
             {displayLabels}
             {activeId}
-            {newTabShortcut}
-            {tilingMode}
             recordingIndicator={sessionLoggingControl}
             {sessionMenu}
             isRecording={sessionIsRecording}
             onselect={activateTab}
             onclose={(id) => requestClose({ kind: "tab", id })}
             onbookmark={bookmark}
-            onnew={(shiftKey) => openPicker(shiftKey)}
+            onnew={() => openPicker(false)}
             ondrop={tileTab}
           />
         </div>
@@ -2012,15 +2010,13 @@
         {sessions}
         {displayLabels}
         {activeId}
-        {newTabShortcut}
-        {tilingMode}
         recordingIndicator={sessionLoggingControl}
         {sessionMenu}
         isRecording={sessionIsRecording}
         onselect={activateTab}
         onclose={(id) => requestClose({ kind: "tab", id })}
         onbookmark={bookmark}
-        onnew={(shiftKey) => openPicker(shiftKey)}
+        onnew={() => openPicker(false)}
         ondrop={tileTab}
       />
       <button
