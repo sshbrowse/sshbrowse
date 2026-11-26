@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
-import { canCheckForUpdates, claimStartupUpdateCheck, githubReleaseURL } from "../src/lib/updates.ts";
+import { canCheckForUpdates, githubReleaseURL } from "../src/lib/updates.ts";
 import { preferenceKeys } from "../src/lib/storage.ts";
 
 // Execute the real App event callbacks without requiring a desktop WebView.
@@ -25,8 +25,7 @@ function visit(node: ts.Node) {
 }
 visit(ast);
 
-function app(storageUnavailable = false) {
-  const values = new Map<string, string>();
+function app(values = new Map<string, string>()) {
   const emitted: string[] = [];
   const timers = new Map<number, () => void>();
   const timerDelays: number[] = [];
@@ -39,7 +38,7 @@ function app(storageUnavailable = false) {
     updateCheckStartedAt: 0, updateCheckResultTimer: null, manualUpdateCheckMinimumDurationMs: 1000,
     setTimeout: (callback: () => void, delay: number) => { const id = nextTimerId++; timers.set(id, callback); timerDelays.push(delay); return id; },
     clearTimeout: (id: number) => { timers.delete(id); },
-    canCheckForUpdates, claimStartupUpdateCheck, githubReleaseURL,
+    canCheckForUpdates, githubReleaseURL,
     startupUpdateCheckEvent: "update:startup-check",
     checkForUpdatesMenuEvent: "menu:checkForUpdates",
     updateDownloadRequestEvent: "wails:updater:download",
@@ -49,7 +48,6 @@ function app(storageUnavailable = false) {
     Events: { Emit: (name: string) => { emitted.push(name); return Promise.resolve(); } },
     localStorage: storage,
   };
-  if (storageUnavailable) Object.defineProperty(state, "localStorage", { get() { throw new Error("storage denied"); } });
   const context = vm.createContext(state);
   function send(name: string, data?: unknown) {
     const callback = callbacks.get(name);
@@ -91,9 +89,9 @@ test("backup operations block update actions and preference writes until they fi
   assert.equal(values.get(preferenceKeys.checkUpdatesOnStartup), "false");
 });
 
-test("startup info schedules one metadata check, honors opt-out, and survives denied localStorage", () => {
-  for (const unavailable of [false, true]) {
-    const { send, emitted } = app(unavailable);
+test("startup info schedules one check per launch and honors opt-out", () => {
+  const values = new Map([["sshbrowse.updates.lastStartupCheck", String(Date.now())]]);
+  for (const { send, emitted } of [app(values), app(values)]) {
     send("offUpdateInfo", { availability: "package-manager" });
     send("offUpdateInfo", { availability: "package-manager" });
     assert.deepEqual(emitted, ["update:startup-check"]);

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -17,19 +18,18 @@ import (
 func TestNamedWorkspaceCRUDPersistsOnlyLayoutMetadata(t *testing.T) {
 	connectionsPath := filepath.Join(t.TempDir(), "connections.json")
 	store := NewStore(connectionsPath)
+	panes := slices.Repeat([]Pane{{Kind: "local"}}, 12)
+	panes[0] = Pane{Kind: "ssh", ConnectionID: "saved-connection-id"}
 	wantLayout := Layout{
 		ActiveTab: 0,
-		Tabs: []Tab{{SelectedPane: 1, Panes: []Pane{
-			{Kind: "ssh", ConnectionID: "saved-connection-id"},
-			{Kind: "local"},
-		}}},
+		Tabs:      []Tab{{SelectedPane: 11, Panes: panes}},
 	}
 
 	created, err := store.Save("  Workbench  ", wantLayout)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.Name != "Workbench" || created.ID == "" || created.Layout.ActiveTab != 0 {
+	if created.Name != "Workbench" || created.ID == "" || !reflect.DeepEqual(created.Layout, wantLayout) {
 		t.Fatalf("created workspace = %+v", created)
 	}
 	state := store.Load()
@@ -169,6 +169,10 @@ func TestLayoutValidationBoundsAndKinds(t *testing.T) {
 	tooManyTabs := Layout{ActiveTab: 0, Tabs: make([]Tab, maxTabs+1)}
 	if _, err := normalizeLayout(tooManyTabs); err == nil {
 		t.Fatal("accepted too many tabs")
+	}
+	tooManyPanes := Layout{ActiveTab: 0, Tabs: []Tab{{Panes: slices.Repeat([]Pane{{Kind: "local"}}, 13)}}}
+	if _, err := normalizeLayout(tooManyPanes); err == nil {
+		t.Fatal("accepted thirteen panes in one tab")
 	}
 	badPane := oneSSHLayout(" ")
 	if _, err := normalizeLayout(badPane); err == nil {

@@ -29,7 +29,7 @@ const (
 	maxNameRunes      = 100
 	maxNameBytes      = 256
 	maxTabs           = 20
-	maxPanesPerTab    = 9
+	maxPanesPerTab    = 12
 	maxConnectionID   = 128
 	maxWorkspaceID    = 64
 	workspaceFileName = "workspaces.json"

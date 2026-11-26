@@ -15,7 +15,6 @@ export const preferenceKeys = {
   rightClickToPaste: "sshbrowse.terminal.rightClickToPaste",
   copyOnSelection: "sshbrowse.terminal.copyOnSelection",
   checkUpdatesOnStartup: "sshbrowse.updates.checkOnStartup",
-  lastStartupUpdateCheck: "sshbrowse.updates.lastStartupCheck",
   terminalScrollbackLines: "sshbrowse.terminal.scrollbackLines",
   collapsedFolders: "sshbrowse.sidebar.collapsed",
   terminalPasteWarningsDisabled: "sshbrowse.terminal.pasteWarningsDisabled",

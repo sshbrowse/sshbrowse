@@ -24,8 +24,8 @@ const (
 	EventSessionExit             = "session:exit"
 	sessionShutdownTimeout       = 10 * time.Second
 	defaultRecordingSetupTimeout = 5 * time.Second
-	// 20 tabs of 9 tiles, the same limits the frontend enforces.
-	maxSessions = 180
+	// Match the frontend's tab and tile limits.
+	maxSessions = 20 * 12
 )
 
 // SessionData carries one chunk of terminal output. Data is base64 so raw

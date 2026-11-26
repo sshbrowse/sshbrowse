@@ -13,10 +13,13 @@ const expectedRowSizes: Record<number, number[]> = {
   7: [3, 2, 2],
   8: [3, 3, 2],
   9: [3, 3, 3],
+  10: [4, 3, 3],
+  11: [4, 4, 3],
+  12: [4, 4, 4],
 };
 
-test("tile layouts distribute one through nine sessions across balanced rows", () => {
-  for (let count = 1; count <= 9; count += 1) {
+test("tile layouts distribute one through twelve sessions across balanced rows", () => {
+  for (let count = 1; count <= 12; count += 1) {
     const layout = tileGrid(count);
     const actualRowSizes = Array.from({ length: layout.rows }, (_, row) =>
       layout.placements.filter((placement) => placement.row === row + 1).length,
@@ -28,7 +31,7 @@ test("tile layouts distribute one through nine sessions across balanced rows", (
 });
 
 test("every tile row is fully covered without overlaps", () => {
-  for (let count = 1; count <= 9; count += 1) {
+  for (let count = 1; count <= 12; count += 1) {
     const layout = tileGrid(count);
     const occupiedTracks = new Set<string>();
 
