@@ -19,6 +19,7 @@ export const preferenceKeys = {
   terminalScrollbackLines: "sshbrowse.terminal.scrollbackLines",
   collapsedFolders: "sshbrowse.sidebar.collapsed",
   terminalPasteWarningsDisabled: "sshbrowse.terminal.pasteWarningsDisabled",
+  terminalPasteDelayMs: "sshbrowse.terminal.pasteDelayMs",
   themeName: "sshbrowse.appearance.theme",
   customPalette: "sshbrowse.appearance.customPalette",
   terminalColors: "sshbrowse.appearance.terminalColors",
@@ -40,6 +41,8 @@ export const terminalScrollbackDefault = 1000;
 export const terminalScrollbackMinimum = 0;
 export const terminalScrollbackMaximum = 50000;
 
+export const terminalPasteDelayMaximumMs = 10_000;
+
 export interface Preferences {
   sidebarWidth: number;
   sidebarVisible: boolean;
@@ -51,6 +54,7 @@ export interface Preferences {
   terminalScrollbackLines: number;
   collapsedFolders: Record<string, boolean>;
   terminalPasteWarningsDisabled: boolean;
+  terminalPasteDelayMs: number;
   themeName: ThemeName;
   customPalette: CustomPalette;
   terminalColors: TerminalColors;
@@ -78,6 +82,10 @@ export function normalizeTerminalScrollback(value: number): number {
     return terminalScrollbackDefault;
   }
   return Math.min(terminalScrollbackMaximum, Math.max(terminalScrollbackMinimum, Math.round(value)));
+}
+
+export function normalizeTerminalPasteDelay(value: number): number {
+  return Number.isInteger(value) && value >= 0 && value <= terminalPasteDelayMaximumMs ? value : 0;
 }
 
 function readTerminalScrollback(storage: PreferenceStorage): number {
@@ -167,6 +175,7 @@ export function loadPreferences(storage: PreferenceStorage): Preferences {
     terminalScrollbackLines: readTerminalScrollback(storage),
     collapsedFolders: readCollapsedFolders(storage),
     terminalPasteWarningsDisabled: readBoolean(storage, preferenceKeys.terminalPasteWarningsDisabled, false),
+    terminalPasteDelayMs: normalizeTerminalPasteDelay(Number(readValue(storage, preferenceKeys.terminalPasteDelayMs))),
     themeName: readThemeName(storage),
     customPalette: parseCustomPalette(readValue(storage, preferenceKeys.customPalette)),
     terminalColors: readTerminalColors(storage),

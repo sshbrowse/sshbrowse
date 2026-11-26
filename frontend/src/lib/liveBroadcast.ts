@@ -11,6 +11,7 @@ export interface LiveBroadcastState {
 export interface LiveBroadcastWriter {
   enqueue(input: string): boolean;
   enqueueTo(processInstanceId: number, input: string): boolean;
+  writePasteLine(input: string, signal: AbortSignal, onWrite?: (processInstanceId: number, pending: Promise<void>) => void): Promise<boolean>;
   stop(reason?: string): void;
   isStopped(): boolean;
   pendingBytes(): number;
@@ -141,7 +142,18 @@ export function createLiveBroadcastWriter(
   }
 
   const targets = snapshot.map((target) => ({ ...target }));
-  const queue: Array<{ input: string; bytes: number; processInstanceId?: number }> = [];
+  interface PasteLine {
+    signal: AbortSignal;
+    onWrite?: (processInstanceId: number, pending: Promise<void>) => void;
+    complete: (written: boolean) => void;
+  }
+  interface QueuedInput {
+    input: string;
+    bytes: number;
+    processInstanceId?: number;
+    paste?: PasteLine;
+  }
+  const queue: QueuedInput[] = [];
   let queuedBytes = 0;
   let stopped = false;
   let draining = false;
@@ -153,6 +165,7 @@ export function createLiveBroadcastWriter(
       return;
     }
     stopped = true;
+    for (const next of queue) next.paste?.complete(false);
     queue.length = 0;
     queuedBytes = 0;
     if (reason !== undefined) {
@@ -160,7 +173,7 @@ export function createLiveBroadcastWriter(
     }
   }
 
-  async function writeChunk(next: { input: string; processInstanceId?: number }): Promise<void> {
+  async function writeChunk(next: QueuedInput): Promise<boolean> {
     const targetIndexes = next.processInstanceId === undefined
       ? targets.map((_target, index) => index)
       : targets.flatMap((target, index) => target.processInstanceId === next.processInstanceId ? [index] : []);
@@ -170,12 +183,17 @@ export function createLiveBroadcastWriter(
     const timeout = new Promise<never>((_, reject) => {
       activeTimeoutHandle = setTimeout(() => reject(new Error("target write timed out")), writeTimeoutMs);
     });
+    let wrote = false;
     const results = await Promise.allSettled(targetIndexes.map(async (targetIndex) => {
       const target = targets[targetIndex];
       await Promise.race([
         // stop() also cancels writes scheduled but not yet issued to the backend.
         Promise.resolve().then(() => {
-          if (!stopped) return write(target.processInstanceId, next.input);
+          if (stopped || next.paste?.signal.aborted) return;
+          const pending = write(target.processInstanceId, next.input);
+          next.paste?.onWrite?.(target.processInstanceId, pending);
+          wrote = true;
+          return pending;
         }),
         timeout,
       ]);
@@ -185,15 +203,13 @@ export function createLiveBroadcastWriter(
       activeTimeoutHandle = undefined;
     }
     const failureIndex = results.findIndex((result) => result.status === "rejected");
-    if (failureIndex >= 0) {
-      const failure = results[failureIndex];
-      if (failure.status !== "rejected") {
-        return;
-      }
+    const failure = results[failureIndex];
+    if (failure?.status === "rejected") {
       const message = failure.reason instanceof Error ? failure.reason.message : String(failure.reason);
       const failedTarget = targets[targetIndexes[failureIndex]];
       throw new Error(`Live broadcast stopped because a write to ${failedTarget.label} failed: ${message}. Some targets may have received input before the failure and may have diverged.`);
     }
+    return wrote;
   }
 
   async function drain() {
@@ -209,9 +225,11 @@ export function createLiveBroadcastWriter(
         }
         queuedBytes -= next.bytes;
         try {
-          await writeChunk(next);
+          const written = await writeChunk(next);
+          next.paste?.complete(written);
         } catch (error) {
           stop(error instanceof Error ? error.message : String(error));
+          next.paste?.complete(false);
         }
       }
     } finally {
@@ -240,6 +258,13 @@ export function createLiveBroadcastWriter(
     enqueueTo(processInstanceId, input) {
       return enqueueInput(input, processInstanceId);
     },
+    writePasteLine(input, signal, onWrite) {
+      return new Promise((complete) => {
+        if (signal.aborted || !enqueueInput(input, undefined, { signal, onWrite, complete })) {
+          complete(false);
+        }
+      });
+    },
     stop,
     isStopped() {
       return stopped;
@@ -249,7 +274,7 @@ export function createLiveBroadcastWriter(
     },
   };
 
-  function enqueueInput(input: string, processInstanceId?: number): boolean {
+  function enqueueInput(input: string, processInstanceId?: number, paste?: PasteLine): boolean {
     if (stopped) {
       return false;
     }
@@ -259,9 +284,10 @@ export function createLiveBroadcastWriter(
       return false;
     }
     if (bytes === 0) {
+      paste?.complete(true);
       return true;
     }
-    queue.push({ input, bytes, processInstanceId });
+    queue.push({ input, bytes, processInstanceId, paste });
     queuedBytes += bytes;
     scheduleDrain();
     return true;

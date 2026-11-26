@@ -32,8 +32,9 @@ const customPalettePreferenceKey = "sshbrowse.appearance.customPalette"
 
 // Older version 1 backups can omit preferences for features added later.
 var optionalBackupPreferenceRules = map[string]func(string) bool{
-	customPalettePreferenceKey:  customPalettePreference,
-	"sshbrowse.sidebar.compact": booleanPreference,
+	customPalettePreferenceKey:        customPalettePreference,
+	"sshbrowse.sidebar.compact":       booleanPreference,
+	"sshbrowse.terminal.pasteDelayMs": integerPreference(0, 10000),
 }
 
 func validateBackupPreferences(preferences map[string]string) error {

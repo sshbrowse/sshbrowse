@@ -10,7 +10,7 @@
   import { customThemeStyle, defaultCustomPalette, isHexColor, type CustomPalette } from "./customPalette";
   import type { TerminalColors, TerminalFontName, ThemeName } from "./appearance";
   import type { UpdateInfo } from "./menuEvents";
-  import { terminalScrollbackMinimum, terminalScrollbackMaximum, type UiSize } from "./storage";
+  import { terminalPasteDelayMaximumMs, terminalScrollbackMinimum, terminalScrollbackMaximum, type UiSize } from "./storage";
   import { canCheckForUpdates } from "./updates";
 
   let {
@@ -31,6 +31,7 @@
     terminalScrollbackLines,
     sidebarWidth,
     sidebarCompact,
+    terminalPasteDelayMs,
     updateInfo,
     updateStatus,
     updateError,
@@ -64,6 +65,7 @@
     onpastewarningschange,
     onterminalscrollbackchange,
     oncompactchange,
+    onpastedelaychange,
     onclose,
   }: {
     sessionsOpen: boolean;
@@ -83,6 +85,7 @@
     terminalScrollbackLines: number;
     sidebarWidth: number;
     sidebarCompact: boolean;
+    terminalPasteDelayMs: number;
     updateInfo: UpdateInfo | null;
     updateStatus: string;
     updateError: boolean;
@@ -116,6 +119,7 @@
     onpastewarningschange: (disabled: boolean) => void;
     onterminalscrollbackchange: (lines: number) => void;
     oncompactchange: (compact: boolean) => void;
+    onpastedelaychange: (delayMs: number) => void;
     onclose: () => void;
   } = $props();
 
@@ -152,9 +156,14 @@
   let pageContent: HTMLElement;
   // Apply explicitly: lowering the live limit discards retained terminal output.
   let scrollbackDraft = $state<number | undefined>(undefined);
+  let pasteDelayDraft = $state<number | undefined>(undefined);
 
   $effect(() => {
     scrollbackDraft = terminalScrollbackLines;
+  });
+
+  $effect(() => {
+    pasteDelayDraft = terminalPasteDelayMs;
   });
 
   onMount(() => {
@@ -171,6 +180,13 @@
   function selectSection(section: Section) {
     selectedSection = section;
     pageContent.scrollTop = 0;
+  }
+
+  function applyPasteDelay(event: SubmitEvent) {
+    event.preventDefault();
+    if (pasteDelayDraft !== undefined) {
+      onpastedelaychange(pasteDelayDraft);
+    }
   }
 
   function applyScrollback(event: SubmitEvent) {
@@ -385,7 +401,7 @@
                     <label for="terminal-scrollback-lines"><strong>Scrollback lines</strong></label>
                     <span id="scrollback-description">History for all terminals. 0 disables; maximum 50,000 lines.</span>
                   </div>
-                  <form class="scrollback-control" onsubmit={applyScrollback}>
+                  <form class="number-control" onsubmit={applyScrollback}>
                     <input
                       id="terminal-scrollback-lines"
                       type="number"
@@ -406,6 +422,25 @@
                 <div class="setting-row">
                   <div><strong>Right-click to paste</strong><span>Shift + right-click opens the context menu</span></div>
                   <button class="switch" type="button" role="switch" aria-label="Right-click to paste" aria-checked={rightClickToPaste} onclick={() => onrightclickpastechange(!rightClickToPaste)}><span></span></button>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <label for="terminal-paste-delay"><strong>Paste delay (ms)</strong></label>
+                    <span id="paste-delay-description">Between pasted lines. 0 turns it off.</span>
+                  </div>
+                  <form class="number-control" onsubmit={applyPasteDelay}>
+                    <input
+                      id="terminal-paste-delay"
+                      type="number"
+                      min="0"
+                      max={terminalPasteDelayMaximumMs}
+                      step="1"
+                      required
+                      aria-describedby="paste-delay-description"
+                      bind:value={pasteDelayDraft}
+                    />
+                    <button class="update-button" type="submit" disabled={pasteDelayDraft === undefined || pasteDelayDraft === terminalPasteDelayMs}>Apply</button>
+                  </form>
                 </div>
                 <div class="setting-row">
                   <div><strong>Warn before pasting multiple lines</strong></div>
@@ -580,9 +615,9 @@
   .update-status { color: var(--text-primary); }
   .update-status.error { color: var(--status-error); }
   .segmented, .stepper { display: flex; flex: none; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--input-surface); }
-  .scrollback-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
+  .number-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
   .segmented { flex-wrap: wrap; max-width: 100%; }
-  .scrollback-control input { width: 110px; min-height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--input-surface); color: var(--text-primary); font: inherit; }
+  .number-control input { width: 110px; min-height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--input-surface); color: var(--text-primary); font: inherit; }
   .segmented button, .stepper button { min-height: 34px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text-secondary); font: inherit; cursor: default; }
   .segmented button:hover, .stepper button:hover:not(:disabled) { background: var(--control-hover); color: var(--text-primary); }
   .segmented button.active { background: var(--selection); color: var(--text-primary); }

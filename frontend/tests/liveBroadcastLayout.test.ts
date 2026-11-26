@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
-import { createLiveBroadcastWriter, liveBroadcastLayoutInvalidationReason, liveBroadcastSnapshotInvalidationReason } from "../src/lib/liveBroadcast.ts";
+import { createLiveBroadcastWriter, liveBroadcastLayoutInvalidationReason, liveBroadcastSnapshotInvalidationReason, maximumLiveBroadcastQueuedBytes } from "../src/lib/liveBroadcast.ts";
 import { detachSession, focusedSessionId, selectSession, tileTab } from "../src/lib/workspace.ts";
-import { isTerminalTargetCurrent } from "../src/lib/terminalInput.ts";
+import { isTerminalTargetCurrent, utf8ByteLength } from "../src/lib/terminalInput.ts";
 import type { Tab } from "../src/lib/tabs.ts";
 
 const tabs: Tab[] = [
@@ -38,6 +38,7 @@ for (const [action, reason] of [
       sessions,
       liveBroadcast: { snapshot } as { snapshot: typeof snapshot } | null,
       liveBroadcastWriter: writer, liveBroadcastGeneration: 1, liveBroadcastError: "",
+      activePastes: new Map(),
       liveBroadcastLayoutInvalidationReason, liveBroadcastSnapshotInvalidationReason,
       detachSessionState: detachSession, tileTabState: tileTab,
       focusedSessionId, isTerminalTargetCurrent, Sessions: { Write: write }, console,
@@ -74,6 +75,35 @@ for (const [action, reason] of [
     assert.deepEqual(writes, [[sessionId + 100, "after"]]);
   });
 }
+
+test("paced paste drops keystrokes and sends Ctrl+C after cleanup", async () => {
+  const controller = new AbortController();
+  const { promise: finished, resolve } = Promise.withResolvers<void>();
+  const activePastes = new Map([[101, { controller, bracketed: true, deferredBytes: 0, finished }]]);
+  const writes: string[] = [];
+  const context = vm.createContext({
+    sessions, activePastes, liveBroadcast: null, liveBroadcastWriter: null, liveBroadcastGeneration: 0,
+    isTerminalTargetCurrent, utf8ByteLength, maximumLiveBroadcastQueuedBytes, console,
+    Sessions: { Write: async (_id: number, input: string) => { writes.push(input); } },
+  });
+  vm.runInContext(appActions, context);
+  const route = (input: string, mirrorToBroadcast: boolean) => {
+    context.event = { sessionId: 1, processInstanceId: 101, input, mirrorToBroadcast };
+    vm.runInContext("routeTerminalInput(event)", context);
+  };
+
+  route("unexpected key", true);
+  route("\x1b[1;1R", false);
+  assert.equal(controller.signal.aborted, false);
+  route("\x03", true);
+  assert.equal(controller.signal.aborted, true);
+  assert.deepEqual(writes, []);
+
+  activePastes.delete(101);
+  resolve();
+  await new Promise<void>((done) => setImmediate(done));
+  assert.deepEqual(writes, ["\x1b[1;1R", "\x03"]);
+});
 
 test("tile selection and tab reordering preserve the broadcast context", () => {
   const selected = selectSession(tabs, 2)!;

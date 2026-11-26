@@ -30,6 +30,7 @@ test("capture exports every effective preference and excludes the transient upda
     [preferenceKeys.sidebarWidth]: "999",
     [preferenceKeys.sidebarVisible]: "false",
     [preferenceKeys.sidebarCompact]: "true",
+    [preferenceKeys.terminalPasteDelayMs]: "100",
     [preferenceKeys.collapsedFolders]: JSON.stringify(["prod", "dev"]),
     [preferenceKeys.interfaceScale]: "1.26",
     [preferenceKeys.lastStartupUpdateCheck]: "123456789",
@@ -38,6 +39,7 @@ test("capture exports every effective preference and excludes the transient upda
 
   const result = captureBackupPreferences(source);
   assert.equal(result[preferenceKeys.sidebarCompact], "true");
+  assert.equal(result[preferenceKeys.terminalPasteDelayMs], "100");
   assert.equal(result[preferenceKeys.sidebarWidth], "360");
   assert.equal(result[preferenceKeys.sidebarVisible], "false");
   assert.equal(result[preferenceKeys.collapsedFolders], '["dev","prod"]');
@@ -183,6 +185,7 @@ test("custom colors round-trip and old complete backups receive a default palett
   const {
     [preferenceKeys.customPalette]: _palette,
     [preferenceKeys.sidebarCompact]: _compact,
+    [preferenceKeys.terminalPasteDelayMs]: _delay,
     ...legacy
   } = current;
   assert.deepEqual(validateBackupPreferences(legacy), current);
