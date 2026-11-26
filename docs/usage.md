@@ -8,8 +8,6 @@
   The **Shell** menu also opens SFTP sessions and local terminals.
 - The **+** button in the tab bar opens a new tab. Enable **View > Toggle Tiling Mode**
   to open saved connections from the sidebar as tiles.
-- Enable **Settings > Appearance > Compact session manager** for single-line
-  connection rows.
 - Set a saved connection or raw ProxyJump route as a jump host when needed.
 
 Your system's OpenSSH handles authentication, host keys, and SSH configuration.
