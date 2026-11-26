@@ -30,6 +30,7 @@
     terminalPasteWarningsDisabled,
     terminalScrollbackLines,
     sidebarWidth,
+    sidebarCompact,
     updateInfo,
     updateStatus,
     updateError,
@@ -62,6 +63,7 @@
     oncopyselectionchange,
     onpastewarningschange,
     onterminalscrollbackchange,
+    oncompactchange,
     onclose,
   }: {
     sessionsOpen: boolean;
@@ -80,6 +82,7 @@
     terminalPasteWarningsDisabled: boolean;
     terminalScrollbackLines: number;
     sidebarWidth: number;
+    sidebarCompact: boolean;
     updateInfo: UpdateInfo | null;
     updateStatus: string;
     updateError: boolean;
@@ -112,6 +115,7 @@
     oncopyselectionchange: (enabled: boolean) => void;
     onpastewarningschange: (disabled: boolean) => void;
     onterminalscrollbackchange: (lines: number) => void;
+    oncompactchange: (compact: boolean) => void;
     onclose: () => void;
   } = $props();
 
@@ -348,6 +352,10 @@
                 <h2 id="type-heading">Interface</h2>
               </div>
               <div class="setting-group">
+                <div class="setting-row">
+                  <div><strong>Compact session manager</strong></div>
+                  <button class="switch" type="button" role="switch" aria-label="Compact session manager" aria-checked={sidebarCompact} onclick={() => oncompactchange(!sidebarCompact)}><span></span></button>
+                </div>
                 <div class="setting-row">
                   <div><strong>Interface text</strong></div>
                   <div class="segmented" role="group" aria-label="Interface text size">

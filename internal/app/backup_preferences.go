@@ -30,15 +30,15 @@ var backupPreferenceRules = map[string]func(string) bool{
 
 const customPalettePreferenceKey = "sshbrowse.appearance.customPalette"
 
+// Older version 1 backups can omit preferences for features added later.
+var optionalBackupPreferenceRules = map[string]func(string) bool{
+	customPalettePreferenceKey:  customPalettePreference,
+	"sshbrowse.sidebar.compact": booleanPreference,
+}
+
 func validateBackupPreferences(preferences map[string]string) error {
-	// Older version 1 backups predate the optional custom palette.
-	_, hasPalette := preferences[customPalettePreferenceKey]
-	expected := len(backupPreferenceRules)
-	if hasPalette {
-		expected++
-	}
-	if len(preferences) != expected || (!hasPalette && preferences["sshbrowse.appearance.theme"] == "custom") {
-		return fmt.Errorf("backup must contain all portable preferences")
+	if _, hasPalette := preferences[customPalettePreferenceKey]; !hasPalette && preferences["sshbrowse.appearance.theme"] == "custom" {
+		return fmt.Errorf("missing backup preference %q", customPalettePreferenceKey)
 	}
 	for key := range backupPreferenceRules {
 		if _, ok := preferences[key]; !ok {
@@ -47,8 +47,8 @@ func validateBackupPreferences(preferences map[string]string) error {
 	}
 	for key, value := range preferences {
 		valid, ok := backupPreferenceRules[key]
-		if key == customPalettePreferenceKey {
-			valid, ok = customPalettePreference, true
+		if !ok {
+			valid, ok = optionalBackupPreferenceRules[key]
 		}
 		if !ok {
 			return fmt.Errorf("unsupported backup preference %q", key)

@@ -31,6 +31,7 @@ function storage(values: Record<string, string> = {}) {
 const expectedDefaults = {
   sidebarWidth: 248,
   sidebarVisible: true,
+  sidebarCompact: false,
   tilingMode: false,
   rightClickToPaste: false,
   copyOnSelection: true,
@@ -51,6 +52,7 @@ test("current preferences load correctly", () => {
   const preferences = storage({
     [preferenceKeys.sidebarWidth]: "280",
     [preferenceKeys.sidebarVisible]: "false",
+    [preferenceKeys.sidebarCompact]: "true",
     [preferenceKeys.tilingMode]: "true",
     [preferenceKeys.rightClickToPaste]: "true",
     [preferenceKeys.copyOnSelection]: "false",
@@ -68,6 +70,7 @@ test("current preferences load correctly", () => {
   assert.deepEqual(loadPreferences(preferences), {
     sidebarWidth: 280,
     sidebarVisible: false,
+    sidebarCompact: true,
     tilingMode: true,
     rightClickToPaste: true,
     copyOnSelection: false,
@@ -93,6 +96,7 @@ test("invalid preference values fall back to safe defaults", () => {
   const preferences = storage({
     [preferenceKeys.sidebarWidth]: "not-a-width",
     [preferenceKeys.sidebarVisible]: "maybe",
+    [preferenceKeys.sidebarCompact]: "maybe",
     [preferenceKeys.tilingMode]: "1",
     [preferenceKeys.rightClickToPaste]: "1",
     [preferenceKeys.copyOnSelection]: "1",

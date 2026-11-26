@@ -245,6 +245,7 @@
   let bookmarkingSessionId: number | null = null;
   let sidebarVisible = $state(true);
   let sidebarWidth = $state(sidebarDefaultWidth);
+  let sidebarCompact = $state(false);
   let tilingMode = $state(false);
   let rightClickToPaste = $state(false);
   let copyOnSelection = $state(true);
@@ -793,6 +794,11 @@
     }
     tilingMode = !tilingMode;
     persistPreference(preferenceKeys.tilingMode, String(tilingMode));
+  }
+
+  function setSidebarCompact(compact: boolean) {
+    sidebarCompact = compact;
+    persistPreference(preferenceKeys.sidebarCompact, String(compact));
   }
 
   function setRightClickToPaste(enabled: boolean) {
@@ -1617,6 +1623,7 @@
       const preferences = loadPreferences(localStorage);
       broadcastMode = loadBroadcastMode(localStorage);
       sidebarWidth = preferences.sidebarWidth;
+      sidebarCompact = preferences.sidebarCompact;
       sidebarVisible = preferences.sidebarVisible;
       tilingMode = preferences.tilingMode;
       terminalPasteWarningsDisabled = preferences.terminalPasteWarningsDisabled;
@@ -1905,6 +1912,7 @@
   <Sidebar
     visible={sidebarVisible}
     width={sidebarWidth}
+    compact={sidebarCompact}
     {interfaceScale}
     inactive={settingsOpen}
     onsettings={openSettings}
@@ -2257,6 +2265,7 @@
       {copyOnSelection}
       {terminalPasteWarningsDisabled}
       {sidebarWidth}
+      {sidebarCompact}
       {updateInfo}
       {updateStatus}
       {updateError}
@@ -2285,6 +2294,7 @@
       onterminalfontsizechange={setTerminalFontSize}
       onterminalfontchange={setTerminalFontName}
       onterminalscrollbackchange={setTerminalScrollbackLines}
+      oncompactchange={setSidebarCompact}
       onrightclickpastechange={setRightClickToPaste}
       oncopyselectionchange={setCopyOnSelection}
       onpastewarningschange={setTerminalPasteWarningsDisabled}

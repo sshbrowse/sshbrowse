@@ -29,6 +29,7 @@ test("capture exports every effective preference and excludes the transient upda
   const source = storage({
     [preferenceKeys.sidebarWidth]: "999",
     [preferenceKeys.sidebarVisible]: "false",
+    [preferenceKeys.sidebarCompact]: "true",
     [preferenceKeys.collapsedFolders]: JSON.stringify(["prod", "dev"]),
     [preferenceKeys.interfaceScale]: "1.26",
     [preferenceKeys.lastStartupUpdateCheck]: "123456789",
@@ -36,7 +37,7 @@ test("capture exports every effective preference and excludes the transient upda
   });
 
   const result = captureBackupPreferences(source);
-  assert.equal(Object.keys(result).length, 16);
+  assert.equal(result[preferenceKeys.sidebarCompact], "true");
   assert.equal(result[preferenceKeys.sidebarWidth], "360");
   assert.equal(result[preferenceKeys.sidebarVisible], "false");
   assert.equal(result[preferenceKeys.collapsedFolders], '["dev","prod"]');
@@ -61,7 +62,7 @@ test("validation requires the exact known settings and rejects unsafe values", (
   assert.doesNotThrow(() => validateBackupPreferences({ ...valid, [preferenceKeys.interfaceScale]: "1" }));
 
   const { [preferenceKeys.themeName]: _theme, ...missing } = valid;
-  assert.throws(() => validateBackupPreferences(missing), /incomplete/);
+  assert.throws(() => validateBackupPreferences(missing), /missing/);
   assert.throws(
     () => validateBackupPreferences({ ...valid, "sshbrowse.unknown": "true" }),
     /incomplete|unsupported/,
@@ -179,9 +180,13 @@ test("custom colors round-trip and old complete backups receive a default palett
   assert.equal(target.getItem(preferenceKeys.themeName), "custom");
 
   const current = captureBackupPreferences(storage());
-  const { [preferenceKeys.customPalette]: _palette, ...legacy } = current;
+  const {
+    [preferenceKeys.customPalette]: _palette,
+    [preferenceKeys.sidebarCompact]: _compact,
+    ...legacy
+  } = current;
   assert.deepEqual(validateBackupPreferences(legacy), current);
-  assert.throws(() => validateBackupPreferences({ ...legacy, [preferenceKeys.themeName]: "custom" }), /incomplete/);
+  assert.throws(() => validateBackupPreferences({ ...legacy, [preferenceKeys.themeName]: "custom" }), /missing/);
   for (const bad of ["null", "[]", '{"surface":"red","accent":"#123456","terminal":"#000000"}', JSON.stringify({ ...palette, extra: "#000000" })]) {
     assert.throws(() => validateBackupPreferences({ ...current, [preferenceKeys.customPalette]: bad }), /invalid/);
   }

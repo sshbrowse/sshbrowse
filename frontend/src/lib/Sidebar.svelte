@@ -70,6 +70,7 @@
     visible = true,
     inactive = false,
     width = 224,
+    compact,
     interfaceScale = 1,
     onsettings,
     onresize,
@@ -98,6 +99,7 @@
     visible?: boolean;
     inactive?: boolean;
     width?: number;
+    compact: boolean;
     interfaceScale?: number;
     onsettings: () => void;
     onresize?: (width: number) => void;
@@ -728,7 +730,7 @@
   >
     <span class="copy">
       <span class="name">{connection.name}</span>
-      {#if connection.name !== destinationLabel(connection)}
+      {#if !compact && connection.name !== destinationLabel(connection)}
         <span class="detail">{destinationLabel(connection)}</span>
       {/if}
     </span>
@@ -821,7 +823,7 @@
 >
 <div class="sidebar-clip">
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<aside bind:this={sidebar} id="saved-connections" class="sidebar" style:width={`${effectiveWidth}px`} tabindex="-1" aria-label="Saved connections" aria-hidden={!visible || inactive} inert={!visible || inactive} onpointerdown={focusSidebarBackground}>
+<aside bind:this={sidebar} id="saved-connections" class="sidebar" class:compact style:width={`${effectiveWidth}px`} tabindex="-1" aria-label="Saved connections" aria-hidden={!visible || inactive} inert={!visible || inactive} onpointerdown={focusSidebarBackground}>
   <div class="header">
     <span class="header-actions">
       <button type="button" class="icon" aria-label="Workspaces" title="Save or open workspaces" disabled={!workspacesReady} onclick={onworkspaces}>
@@ -1101,6 +1103,13 @@
     font: inherit;
     text-align: left;
     cursor: default;
+  }
+  .compact .item {
+    min-height: 28px;
+    padding-block: 1px;
+  }
+  .compact .more {
+    height: 24px;
   }
   .item:hover,
   .group:hover {

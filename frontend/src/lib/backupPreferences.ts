@@ -7,6 +7,7 @@ export type BackupPreferenceStorage = Pick<Storage, "getItem" | "setItem" | "rem
 const transferableKeys = [
   preferenceKeys.sidebarWidth,
   preferenceKeys.sidebarVisible,
+  preferenceKeys.sidebarCompact,
   preferenceKeys.tilingMode,
   preferenceKeys.rightClickToPaste,
   preferenceKeys.copyOnSelection,
@@ -49,6 +50,7 @@ function canonicalPreferences(preferences: ReturnType<typeof loadPreferences>): 
   return {
     [preferenceKeys.sidebarWidth]: String(preferences.sidebarWidth),
     [preferenceKeys.sidebarVisible]: String(preferences.sidebarVisible),
+    [preferenceKeys.sidebarCompact]: String(preferences.sidebarCompact),
     [preferenceKeys.tilingMode]: String(preferences.tilingMode),
     [preferenceKeys.rightClickToPaste]: String(preferences.rightClickToPaste),
     [preferenceKeys.copyOnSelection]: String(preferences.copyOnSelection),
@@ -100,6 +102,7 @@ function isValidPreferenceValue(key: string, value: string): boolean {
     case preferenceKeys.sidebarWidth:
       return validInteger(value, 180, 360);
     case preferenceKeys.sidebarVisible:
+    case preferenceKeys.sidebarCompact:
     case preferenceKeys.tilingMode:
     case preferenceKeys.rightClickToPaste:
     case preferenceKeys.copyOnSelection:
@@ -138,21 +141,13 @@ function isValidPreferenceValue(key: string, value: string): boolean {
   }
 }
 
-/** Require the complete known set, while accepting backups from before custom palettes. */
 export function validateBackupPreferences(input: unknown): BackupPreferenceMap {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Backup preferences must be an object.");
   }
-  const entries = Object.entries(input);
-  const legacy = entries.length === transferableKeys.length - 1
-    && !Object.hasOwn(input, preferenceKeys.customPalette)
-    && (input as Record<string, unknown>)[preferenceKeys.themeName] !== "custom";
-  if (entries.length !== transferableKeys.length && !legacy) {
-    throw new Error("Backup preferences are incomplete or contain unsupported settings.");
-  }
 
   const preferences: BackupPreferenceMap = {};
-  for (const [key, value] of entries) {
+  for (const [key, value] of Object.entries(input)) {
     if (
       !transferableKeySet.has(key)
       || typeof value !== "string"
@@ -163,7 +158,11 @@ export function validateBackupPreferences(input: unknown): BackupPreferenceMap {
     }
     preferences[key] = value;
   }
-  if (legacy) preferences[preferenceKeys.customPalette] = JSON.stringify(defaultCustomPalette);
+  // Older backups omit features introduced after the first backup format.
+  if (preferences[preferenceKeys.themeName] !== "custom") {
+    preferences[preferenceKeys.customPalette] ??= JSON.stringify(defaultCustomPalette);
+  }
+  preferences[preferenceKeys.sidebarCompact] ??= "false";
   for (const key of transferableKeys) {
     if (!Object.hasOwn(preferences, key)) {
       throw new Error(`Backup preference ${key} is missing.`);

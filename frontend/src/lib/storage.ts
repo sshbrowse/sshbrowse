@@ -9,6 +9,7 @@ export type BroadcastMode = "command" | "live";
 export const preferenceKeys = {
   sidebarWidth: "sshbrowse.sidebar.width",
   sidebarVisible: "sshbrowse.sidebar.visible",
+  sidebarCompact: "sshbrowse.sidebar.compact",
   tilingMode: "sshbrowse.tiling.enabled",
   broadcastMode: "sshbrowse.broadcast.mode",
   rightClickToPaste: "sshbrowse.terminal.rightClickToPaste",
@@ -42,6 +43,7 @@ export const terminalScrollbackMaximum = 50000;
 export interface Preferences {
   sidebarWidth: number;
   sidebarVisible: boolean;
+  sidebarCompact: boolean;
   tilingMode: boolean;
   rightClickToPaste: boolean;
   copyOnSelection: boolean;
@@ -157,6 +159,7 @@ export function loadPreferences(storage: PreferenceStorage): Preferences {
   return {
     sidebarWidth: readSidebarWidth(storage),
     sidebarVisible: readBoolean(storage, preferenceKeys.sidebarVisible, true),
+    sidebarCompact: readBoolean(storage, preferenceKeys.sidebarCompact, false),
     tilingMode: readBoolean(storage, preferenceKeys.tilingMode, false),
     rightClickToPaste: readBoolean(storage, preferenceKeys.rightClickToPaste, false),
     copyOnSelection: readBoolean(storage, preferenceKeys.copyOnSelection, true),
