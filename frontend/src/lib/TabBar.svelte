@@ -10,8 +10,6 @@
     sessions,
     displayLabels,
     activeId,
-    newTabShortcut,
-    tilingMode,
     recordingIndicator,
     sessionMenu,
     isRecording,
@@ -25,15 +23,13 @@
     sessions: Session[];
     displayLabels: ReadonlyMap<number, string>;
     activeId: number | null;
-    newTabShortcut: string;
-    tilingMode: boolean;
     recordingIndicator: Snippet<[number]>;
     sessionMenu: (sessionId: number) => { name: string; target: string } | null;
     isRecording: (sessionId: number) => boolean;
     onselect: (id: number) => void;
     onclose: (id: number) => void;
     onbookmark: (id: number) => void;
-    onnew: (shiftKey: boolean) => void;
+    onnew: () => void;
     ondrop: (sourceTabId: number, targetTabId: number) => void;
   } = $props();
 
@@ -276,9 +272,9 @@
   {/each}
   <button
     class="new"
-    aria-label="Open session"
-    title={`Open session (${newTabShortcut}). Shift+click to open ${tilingMode ? "in a new tab" : "as a tile"}`}
-    onclick={(event) => onnew(event.shiftKey)}
+    aria-label="New tab"
+    title="New tab"
+    onclick={onnew}
   ><Plus size={16} /></button>
 </div>
 
