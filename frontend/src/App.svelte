@@ -76,9 +76,11 @@
     type UpdateInfo,
     type EditMenuAction,
   } from "./lib/menuEvents";
-  import { broadcastRecipients, createBroadcastSender, placeNewSession } from "./lib/routing";
+  import { broadcastRecipients, createBroadcastSender, placeNewSession, type BroadcastSnapshot } from "./lib/routing";
   import {
     createLiveBroadcastWriter,
+    defaultLiveBroadcastWriteTimeoutMs,
+    maximumLiveBroadcastQueuedBytes,
     liveBroadcastLayoutInvalidationReason,
     liveBroadcastPasteError,
     liveBroadcastPasteGenerationError,
@@ -88,7 +90,8 @@
     type LiveBroadcastState,
     type LiveBroadcastWriter,
   } from "./lib/liveBroadcast";
-  import { isTerminalTargetCurrent, type TerminalInputEvent } from "./lib/terminalInput";
+  import { isTerminalTargetCurrent, utf8ByteLength, type TerminalInputEvent } from "./lib/terminalInput";
+  import { bracketedPasteEnd, finishPacedPaste, sendPacedPaste, writePasteWithTimeout, type PacedPasteProgress } from "./lib/terminalPaste";
   import {
     connections,
     folders,
@@ -123,6 +126,7 @@
     loadBroadcastMode,
     loadPreferences,
     normalizeTerminalScrollback,
+    normalizeTerminalPasteDelay,
     terminalScrollbackDefault,
     preferenceKeys,
     savePreference,
@@ -266,6 +270,7 @@
   let terminalPasteConfirmingSessionId = $state<number | null>(null);
   let terminalPasteConfirmationDismiss: (() => void) | null = null;
   let terminalPasteWarningsDisabled = $state(false);
+  let terminalPasteDelayMs = $state(0);
   let interfaceScale = $state(interfaceScaleDefault);
   // Menus can take focus before invoking zoom, so remember the last content area.
   let zoomTarget: "terminal" | "sidebar" = "terminal";
@@ -274,6 +279,18 @@
   let liveBroadcastError = $state("");
   let liveBroadcastWriter: LiveBroadcastWriter | null = null;
   const broadcastSender = createBroadcastSender(Sessions.Write);
+
+  interface ActivePaste {
+    controller: AbortController;
+    bracketed: boolean;
+    broadcastWriter: LiveBroadcastWriter | null;
+    deferredBytes: number;
+    pendingWrite?: Promise<void>;
+    bracketOpened?: boolean;
+    retire: () => void;
+    finished: Promise<void>;
+  }
+  const activePastes = new Map<number, ActivePaste>();
   let terminalFocusRequest = $state(0);
   let terminalPaneComponent = $state<TerminalPaneComponent | null>(null);
   let terminalPaneLoadError = $state("");
@@ -431,6 +448,11 @@
     liveBroadcast = null;
     liveBroadcastError = reason ?? "";
     writer?.stop(reason);
+    if (writer !== null) {
+      for (const paste of activePastes.values()) {
+        if (paste.broadcastWriter === writer) paste.controller.abort();
+      }
+    }
   }
 
   function startLiveBroadcast(): string | null {
@@ -440,6 +462,10 @@
     const setupError = liveBroadcastStartError(snapshot, focusedId);
     if (setupError !== null) {
       return setupError;
+    }
+
+    if (snapshot.some((target) => activePastes.has(target.processInstanceId))) {
+      return "Cancel the paste or wait for it to finish.";
     }
 
     const capturedSnapshot = snapshot.map((target) => ({ ...target }));
@@ -529,6 +555,98 @@
     }
   }
 
+  function sendBroadcastCommand(recipients: readonly BroadcastSnapshot[], command: string) {
+    if (recipients.some((target) => activePastes.has(target.processInstanceId))) {
+      throw new Error("Cancel the paste or wait for it to finish.");
+    }
+    return broadcastSender.send(recipients, command);
+  }
+
+  async function pasteTerminalLines(
+    processInstanceId: number,
+    input: string,
+    bracketed: boolean,
+    delayMs: number,
+    controller: AbortController,
+    progress: (value: PacedPasteProgress) => void,
+  ): Promise<void> {
+    const writer = liveBroadcastWriter;
+    const recipients = liveBroadcast?.snapshot.map((target) => target.processInstanceId) ?? [processInstanceId];
+    if (recipients.some((id) => activePastes.has(id))) {
+      throw new Error("A paste is already running in a target terminal.");
+    }
+    if (broadcastSender.isBusy()) {
+      throw new Error("Wait for the broadcast to finish.");
+    }
+
+    const targets = recipients.map((id) => {
+      const { promise: retired, resolve: retire } = Promise.withResolvers<void>();
+      const paste: ActivePaste = {
+        controller, bracketed, broadcastWriter: writer, deferredBytes: 0, retire, finished: Promise.resolve(),
+      };
+      activePastes.set(id, paste);
+      return { id, paste, retired };
+    });
+
+    const sending = sendPacedPaste(
+      input, bracketed, delayMs, controller.signal,
+      async (line, opensBracket) => {
+        const trackWrite = (id: number, pending: Promise<void>) => {
+          const paste = activePastes.get(id);
+          if (paste === undefined) return;
+          paste.pendingWrite = pending;
+          if (opensBracket) paste.bracketOpened = true;
+        };
+        if (writer !== null) {
+          return writer.writePasteLine(line, controller.signal, trackWrite);
+        }
+        const pending = Sessions.Write(processInstanceId, line);
+        trackWrite(processInstanceId, pending);
+        await writePasteWithTimeout(pending, defaultLiveBroadcastWriteTimeoutMs);
+        return true;
+      },
+      progress,
+    );
+    for (const { id, paste, retired } of targets) {
+      const finish = () => Promise.race([
+        retired,
+        finishPacedPaste(paste.pendingWrite, async () => {
+          // This process may have exited while its write was pending.
+          if (paste.bracketOpened && activePastes.get(id) === paste) {
+            await Sessions.Write(id, bracketedPasteEnd);
+          }
+        }),
+      ]);
+      paste.finished = sending.then(finish, finish).finally(() => {
+        if (activePastes.get(id) === paste) activePastes.delete(id);
+      });
+    }
+    // Report a timeout while each affected terminal keeps its input ordered.
+    const finishing = Promise.all(targets.map(({ paste }) => paste.finished));
+    void finishing.catch(() => {});
+    await sending;
+    if (writer?.isStopped()) return;
+    try {
+      await writePasteWithTimeout(finishing, defaultLiveBroadcastWriteTimeoutMs);
+    } catch (error) {
+      if (writer !== null && writer === liveBroadcastWriter) {
+        stopLiveBroadcast(errorMessage(error));
+      }
+      throw error;
+    }
+  }
+
+  function updateTerminalProcess(session: AppSession, processInstanceId: number | null) {
+    const previous = session.processInstanceId;
+    if (previous !== null && previous !== processInstanceId) {
+      const paste = activePastes.get(previous);
+      paste?.controller.abort();
+      paste?.retire();
+      activePastes.delete(previous);
+    }
+    session.processInstanceId = processInstanceId;
+  }
+
   function routeTerminalInput(event: TerminalInputEvent) {
     const session = sessions.find((candidate) => candidate.id === event.sessionId);
     if (
@@ -536,6 +654,33 @@
       session.status !== "live" ||
       !isTerminalTargetCurrent(event, session.id, session.processInstanceId)
     ) {
+      return;
+    }
+    const broadcastPastes = event.mirrorToBroadcast && liveBroadcastWriter !== null
+      ? [...activePastes.values()].filter((paste) => paste.broadcastWriter === liveBroadcastWriter)
+      : [];
+    const paste = activePastes.get(event.processInstanceId) ?? broadcastPastes[0];
+    if (paste !== undefined && (event.mirrorToBroadcast || paste.bracketed)) {
+      if (event.mirrorToBroadcast) {
+        if (event.input !== "\x03") return; // Ctrl+C
+        paste.controller.abort();
+      }
+      // Send Ctrl+C and bracketed-paste replies after the pending paste writes.
+      const bytes = utf8ByteLength(event.input);
+      if (paste.deferredBytes + bytes <= maximumLiveBroadcastQueuedBytes) {
+        paste.deferredBytes += bytes;
+        const generation = liveBroadcastGeneration;
+        const forward = () => {
+          if (!event.mirrorToBroadcast || generation === liveBroadcastGeneration) routeTerminalInput(event);
+        };
+        // Mirrored input must wait for every recipient whose paste is closing.
+        const finished = broadcastPastes.length === 0
+          ? paste.finished
+          : Promise.allSettled(broadcastPastes.map((target) => target.finished));
+        void finished.then(forward, forward);
+      } else {
+        operationError = "Terminal input buffer full. Some input was dropped.";
+      }
       return;
     }
     if (liveBroadcast !== null) {
@@ -799,6 +944,11 @@
   function setSidebarCompact(compact: boolean) {
     sidebarCompact = compact;
     persistPreference(preferenceKeys.sidebarCompact, String(compact));
+  }
+
+  function setTerminalPasteDelay(delayMs: number) {
+    terminalPasteDelayMs = normalizeTerminalPasteDelay(delayMs);
+    persistPreference(preferenceKeys.terminalPasteDelayMs, String(terminalPasteDelayMs));
   }
 
   function setRightClickToPaste(enabled: boolean) {
@@ -1627,6 +1777,7 @@
       sidebarVisible = preferences.sidebarVisible;
       tilingMode = preferences.tilingMode;
       terminalPasteWarningsDisabled = preferences.terminalPasteWarningsDisabled;
+      terminalPasteDelayMs = preferences.terminalPasteDelayMs;
       rightClickToPaste = preferences.rightClickToPaste;
       copyOnSelection = preferences.copyOnSelection;
       checkUpdatesOnStartup = preferences.checkUpdatesOnStartup;
@@ -2088,7 +2239,7 @@
         enabled={!modalDialogOpen()}
         {liveBroadcast}
         broadcastError={liveBroadcastError}
-        sendCommand={broadcastSender.send}
+        sendCommand={sendBroadcastCommand}
         startLiveBroadcast={startLiveBroadcast}
         stopLiveBroadcast={() => stopLiveBroadcast()}
         onclose={closeBroadcastBar}
@@ -2211,13 +2362,15 @@
                 }
               }}
               onstatus={(status) => (session.status = status)}
-              onprocesschange={(processInstanceId) => (session.processInstanceId = processInstanceId)}
+              onprocesschange={(processInstanceId) => updateTerminalProcess(session, processInstanceId)}
               onloggingcontrol={(control) => (session.loggingControl = control)}
               oninput={routeTerminalInput}
               onfocusout={handleTerminalFocusOut}
               onfont={onTerminalFontCommand}
               getBroadcastPasteState={getLiveBroadcastPasteState}
               pasteWarningsDisabled={terminalPasteWarningsDisabled}
+              pasteDelayMs={terminalPasteDelayMs}
+              onpacedpaste={pasteTerminalLines}
               validatepaste={validateTerminalPaste}
               onpasteconfirmationchange={(confirming, dismiss) => handleTerminalPasteConfirmationChange(session.id, confirming, dismiss)}
               onpastewarningschange={setTerminalPasteWarningsDisabled}
@@ -2266,6 +2419,7 @@
       {terminalPasteWarningsDisabled}
       {sidebarWidth}
       {sidebarCompact}
+      {terminalPasteDelayMs}
       {updateInfo}
       {updateStatus}
       {updateError}
@@ -2295,6 +2449,7 @@
       onterminalfontchange={setTerminalFontName}
       onterminalscrollbackchange={setTerminalScrollbackLines}
       oncompactchange={setSidebarCompact}
+      onpastedelaychange={setTerminalPasteDelay}
       onrightclickpastechange={setRightClickToPaste}
       oncopyselectionchange={setCopyOnSelection}
       onpastewarningschange={setTerminalPasteWarningsDisabled}

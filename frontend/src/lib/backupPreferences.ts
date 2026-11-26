@@ -1,5 +1,5 @@
 import { defaultCustomPalette, isCustomPalette } from "./customPalette.ts";
-import { loadPreferences, preferenceKeys, type PreferenceStorage } from "./storage.ts";
+import { loadPreferences, preferenceKeys, terminalPasteDelayMaximumMs, type PreferenceStorage } from "./storage.ts";
 
 export type BackupPreferenceMap = Record<string, string>;
 export type BackupPreferenceStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -15,6 +15,7 @@ const transferableKeys = [
   preferenceKeys.terminalScrollbackLines,
   preferenceKeys.collapsedFolders,
   preferenceKeys.terminalPasteWarningsDisabled,
+  preferenceKeys.terminalPasteDelayMs,
   preferenceKeys.themeName,
   preferenceKeys.customPalette,
   preferenceKeys.terminalColors,
@@ -58,6 +59,7 @@ function canonicalPreferences(preferences: ReturnType<typeof loadPreferences>): 
     [preferenceKeys.terminalScrollbackLines]: String(preferences.terminalScrollbackLines),
     [preferenceKeys.collapsedFolders]: JSON.stringify(Object.keys(preferences.collapsedFolders).sort()),
     [preferenceKeys.terminalPasteWarningsDisabled]: String(preferences.terminalPasteWarningsDisabled),
+    [preferenceKeys.terminalPasteDelayMs]: String(preferences.terminalPasteDelayMs),
     [preferenceKeys.themeName]: preferences.themeName,
     [preferenceKeys.customPalette]: JSON.stringify(preferences.customPalette),
     [preferenceKeys.terminalColors]: preferences.terminalColors,
@@ -109,6 +111,8 @@ function isValidPreferenceValue(key: string, value: string): boolean {
     case preferenceKeys.checkUpdatesOnStartup:
     case preferenceKeys.terminalPasteWarningsDisabled:
       return value === "true" || value === "false";
+    case preferenceKeys.terminalPasteDelayMs:
+      return validInteger(value, 0, terminalPasteDelayMaximumMs);
     case preferenceKeys.terminalScrollbackLines:
       return validInteger(value, 0, 50000);
     case preferenceKeys.collapsedFolders: {
@@ -163,6 +167,7 @@ export function validateBackupPreferences(input: unknown): BackupPreferenceMap {
     preferences[preferenceKeys.customPalette] ??= JSON.stringify(defaultCustomPalette);
   }
   preferences[preferenceKeys.sidebarCompact] ??= "false";
+  preferences[preferenceKeys.terminalPasteDelayMs] ??= "0";
   for (const key of transferableKeys) {
     if (!Object.hasOwn(preferences, key)) {
       throw new Error(`Backup preference ${key} is missing.`);

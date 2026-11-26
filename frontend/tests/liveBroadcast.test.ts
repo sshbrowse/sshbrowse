@@ -84,6 +84,28 @@ test("ordered writer preserves raw control and escape bytes for every target", a
   ]);
 });
 
+test("a paced line reports delivery only after every broadcast write settles", async () => {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  const writes: number[] = [];
+  const writer = createLiveBroadcastWriter(
+    [target(1, 101), target(2, 102)],
+    async (id) => {
+      writes.push(id);
+      if (id === 102) await promise;
+    },
+    () => assert.fail("writer should not stop"),
+  );
+  const delivery = writer.writePasteLine("first", controller.signal);
+  const queued = writer.writePasteLine("second", controller.signal);
+  await settle();
+  controller.abort();
+  resolve();
+  assert.equal(await delivery, true);
+  assert.equal(await queued, false);
+  assert.deepEqual(writes, [101, 102]);
+});
+
 test("source-only replies stay ordered with mirrored input", async () => {
   const writes: Array<{ processInstanceId: number; input: string }> = [];
   const writer = createLiveBroadcastWriter(

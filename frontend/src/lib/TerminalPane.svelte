@@ -74,6 +74,7 @@
     handleShiftEnter,
     isTerminalTargetCurrent,
     splitTerminalInput,
+    terminalPasteRequiresConfirmation,
     terminalRightClickAction,
     type TerminalInputEvent,
   } from "./terminalInput";
@@ -85,6 +86,7 @@
   import { canApplyLoggingResult, type SessionRecordingControl } from "./sessionLogging";
   import { errorMessage } from "./errors";
   import { normalizeTerminalScrollback } from "./storage";
+  import { bracketedPasteEnd, type PacedPasteProgress } from "./terminalPaste";
   import {
     terminalSearchCommandFor,
     TerminalSearchSession,
@@ -120,6 +122,8 @@
     onfont,
     getBroadcastPasteState,
     pasteWarningsDisabled,
+    pasteDelayMs,
+    onpacedpaste,
     validatepaste,
     onpasteconfirmationchange,
     onpastewarningschange,
@@ -153,6 +157,15 @@
     onfont: (command: TerminalFontCommand) => void;
     getBroadcastPasteState: () => LiveBroadcastPasteState;
     pasteWarningsDisabled: boolean;
+    pasteDelayMs: number;
+    onpacedpaste: (
+      processId: number,
+      input: string,
+      bracketed: boolean,
+      delayMs: number,
+      controller: AbortController,
+      progress: (value: PacedPasteProgress) => void,
+    ) => Promise<void>;
     validatepaste: (
       sessionId: number,
       processInstanceId: number | null,
@@ -204,6 +217,9 @@
   let dropTargetId = $derived(processInstanceId === null ? undefined : `terminal-drop-${processInstanceId}`);
   let dropError = $state("");
   let pasteError = $state("");
+  let capturePaste: ((input: string) => void) | null = null;
+  let pasteController = $state<AbortController | null>(null);
+  let pasteProgress = $state<PacedPasteProgress | null>(null);
   let pasteConfirmation = $state<{
     sessionId: number;
     processInstanceId: number | null;
@@ -372,11 +388,12 @@
       pasteError = validationError;
       return;
     }
-    const pasteInfo = classifyTerminalPaste(text);
-    if (!pasteInfo.requiresConfirmation || pasteWarningsDisabled) {
-      // Use xterm's paste path so bracketed paste and line-ending
-      // normalization stay identical to an ordinary paste event.
-      terminal.paste(text);
+    if (pasteController !== null) {
+      pasteError = "A paste is already running.";
+      return;
+    }
+    if (pasteWarningsDisabled || !classifyTerminalPaste(text).requiresConfirmation) {
+      sendTerminalPaste(text);
       return;
     }
     pasteError = "";
@@ -414,9 +431,64 @@
     if (disableWarnings) {
       onpastewarningschange(true);
     }
-    // Keep the approved text on xterm's paste path so bracketed paste and
-    // terminal line-ending behavior remain intact.
-    terminal.paste(text);
+    sendTerminalPaste(text);
+  }
+
+  function sendTerminalPaste(text: string) {
+    const id = processInstanceId;
+    const delayMs = pasteDelayMs;
+    pasteError = "";
+    if (delayMs === 0 || !terminalPasteRequiresConfirmation(text) || id === null || status !== "live") {
+      terminal.paste(text);
+      return;
+    }
+
+    const bracketed = terminal.modes.bracketedPasteMode;
+    let input = "";
+    // Capture this one synchronous xterm paste so it still does newline
+    // normalization and applies bracketed paste exactly once.
+    capturePaste = (data) => { input = data; };
+    try {
+      terminal.paste(text);
+    } finally {
+      capturePaste = null;
+    }
+    const newline = input.indexOf("\r");
+    const contentEnd = input.length - (bracketed ? bracketedPasteEnd.length : 0);
+    if (newline < 0 || newline === contentEnd - 1) {
+      routeTerminalData(input);
+      return;
+    }
+
+    const controller = new AbortController();
+    pasteController = controller;
+    void onpacedpaste(id, input, bracketed, delayMs, controller, (progress) => {
+      if (!disposed) pasteProgress = progress;
+    }).catch((error) => {
+      if (!disposed && processInstanceId === id) {
+        pasteError = `Paste stopped. ${errorMessage(error)}`;
+      }
+    }).finally(() => {
+      if (!disposed) {
+        pasteProgress = null;
+        pasteController = null;
+      }
+    });
+  }
+
+  function cancelPacedPaste() {
+    pasteController?.abort();
+    terminal.focus();
+  }
+
+  function routeTerminalData(input: string) {
+    for (const segment of splitTerminalInput(input)) {
+      if (processInstanceId !== null && status === "live") {
+        oninput({ sessionId, processInstanceId, ...segment });
+      } else if (status === "closed") {
+        handleClosedInput(segment.input);
+      }
+    }
   }
 
   function handleTerminalContextMenu(event: MouseEvent) {
@@ -811,6 +883,7 @@
         if (pendingResize?.id === event.data.id) {
           pendingResize = null;
         }
+        pasteController?.abort();
         processInstanceId = null;
         onprocesschange(null);
         const finalLoggingState = loggingState;
@@ -862,18 +935,9 @@
       },
     );
 
-    function routeTerminalInput(input: string, mirrorToBroadcast = true) {
-      if (processInstanceId !== null && status === "live") {
-        oninput({ sessionId, processInstanceId, input, mirrorToBroadcast });
-      } else if (status === "closed") {
-        handleClosedInput(input);
-      }
-    }
-
     terminal.onData((input) => {
-      for (const segment of splitTerminalInput(input)) {
-        routeTerminalInput(segment.input, segment.mirrorToBroadcast);
-      }
+      if (capturePaste !== null) capturePaste(input);
+      else routeTerminalData(input);
     });
     terminal.onSelectionChange(() => {
       if (copyOnSelection && !terminal.searchSelectionCopy.active) {
@@ -899,6 +963,7 @@
 
     return () => {
       disposed = true;
+      pasteController?.abort();
       observer.disconnect();
       offData();
       offExit();
@@ -1068,7 +1133,14 @@
       <button onclick={() => (dropError = "")}>Dismiss</button>
     </div>
   {/if}
-  {#if pasteError}
+  {#if pasteProgress}
+    <div class="banner paste-progress">
+      <progress aria-label="Paste progress" value={pasteProgress.sent} max={pasteProgress.total}></progress>
+      <span>{pasteProgress.sent} of {pasteProgress.total} lines sent</span>
+      <button type="button" onclick={cancelPacedPaste}>Cancel paste</button>
+    </div>
+  {/if}
+  {#if pasteError && !pasteProgress}
     <div class="banner" role="alert">
       <span>{pasteError}</span>
       <button onclick={() => (pasteError = "")}>Dismiss</button>
@@ -1268,6 +1340,17 @@
   .closed-status:hover .exit-tooltip,
   .closed-status:focus .exit-tooltip {
     display: block;
+  }
+  .paste-progress {
+    width: max-content;
+    max-width: calc(100% - 24px);
+    flex-wrap: wrap;
+  }
+  .paste-progress progress {
+    flex: 1 1 70px;
+    min-width: 0;
+    max-width: 120px;
+    accent-color: var(--accent);
   }
   .banner button {
     border: 0;
