@@ -55,7 +55,7 @@ See the [usage guide](docs/usage.md) for session and terminal tools.
 
 ## Help and contributing
 
-Release builds check GitHub for updates at startup, at most once a day. Disable checks in **Settings > General > Updates**. Downloads and restarts require your approval. See [Linux update options](docs/installation.md).
+Release builds check GitHub for updates each time you launch SSHBrowse. Disable checks in **Settings > General > Updates**. Downloads and restarts require your approval. See [Linux update options](docs/installation.md).
 
 For connection problems, try the same destination with system OpenSSH (`ssh alias` or `ssh user@host`). [Report bugs](https://github.com/sshbrowse/sshbrowse/issues/new/choose) with credentials and private host details removed. Report vulnerabilities privately through [SECURITY.md](SECURITY.md).
 

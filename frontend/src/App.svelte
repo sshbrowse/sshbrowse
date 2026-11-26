@@ -27,7 +27,7 @@
   import UpdateNotice from "./lib/UpdateNotice.svelte";
   import WorkspaceDialog from "./lib/WorkspaceDialog.svelte";
   import { appendWorkspace, captureWorkspace, workspaceAvailability, type SavedLayout, type SavedWorkspace } from "./lib/savedWorkspaces";
-  import { canCheckForUpdates, claimStartupUpdateCheck, githubReleaseURL, type UpdateCheckResult, type UpdateRelease } from "./lib/updates";
+  import { canCheckForUpdates, githubReleaseURL, type UpdateCheckResult, type UpdateRelease } from "./lib/updates";
   import { applyCustomTheme, customThemeProperties, defaultCustomPalette, type CustomPalette } from "./lib/customPalette";
   import type { TerminalColors, TerminalFontName, ThemeName } from "./lib/appearance";
   import {
@@ -1861,13 +1861,7 @@
       updateInfo = event.data;
       if (!startupCheckScheduled && canCheckForUpdates(updateInfo.availability)) {
         startupCheckScheduled = true;
-        let shouldCheck = checkUpdatesOnStartup;
-        try {
-          shouldCheck = claimStartupUpdateCheck(localStorage, checkUpdatesOnStartup);
-        } catch {
-          // A restricted WebView may deny access to localStorage itself.
-        }
-        if (shouldCheck) {
+        if (checkUpdatesOnStartup) {
           // Automatic failures stay quiet; the manual check remains available.
           Events.Emit(startupUpdateCheckEvent).catch(() => {});
         }

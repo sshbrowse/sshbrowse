@@ -25,7 +25,7 @@ function storage(initial: Record<string, string> = {}) {
   };
 }
 
-test("capture exports every effective preference and excludes the transient update throttle", () => {
+test("capture exports effective preferences and excludes unknown keys", () => {
   const source = storage({
     [preferenceKeys.sidebarWidth]: "999",
     [preferenceKeys.sidebarVisible]: "false",
@@ -33,7 +33,6 @@ test("capture exports every effective preference and excludes the transient upda
     [preferenceKeys.terminalPasteDelayMs]: "100",
     [preferenceKeys.collapsedFolders]: JSON.stringify(["prod", "dev"]),
     [preferenceKeys.interfaceScale]: "1.26",
-    [preferenceKeys.lastStartupUpdateCheck]: "123456789",
     "sshbrowse.future.setting": "future",
   });
 
@@ -44,7 +43,6 @@ test("capture exports every effective preference and excludes the transient upda
   assert.equal(result[preferenceKeys.sidebarVisible], "false");
   assert.equal(result[preferenceKeys.collapsedFolders], '["dev","prod"]');
   assert.equal(result[preferenceKeys.interfaceScale], "1.3");
-  assert.equal(result[preferenceKeys.lastStartupUpdateCheck], undefined);
   assert.equal(result["sshbrowse.future.setting"], undefined);
   assert.equal(result[preferenceKeys.themeName], "classic");
 });
@@ -97,7 +95,6 @@ test("validation requires the exact known settings and rejects unsafe values", (
 test("a local storage write failure rolls back all preferences and skips the backend operation", async () => {
   const initial = {
     [preferenceKeys.sidebarVisible]: "false",
-    [preferenceKeys.lastStartupUpdateCheck]: "987654321",
     "sshbrowse.future.setting": "preserve",
   };
   const target = storage(initial);
@@ -127,7 +124,6 @@ test("a local storage write failure rolls back all preferences and skips the bac
 test("backend failure restores exact prior settings and preserves transient keys", async () => {
   const initial = {
     [preferenceKeys.sidebarVisible]: "false",
-    [preferenceKeys.lastStartupUpdateCheck]: "987654321",
     "sshbrowse.future.setting": "preserve",
   };
   const target = storage(initial);
@@ -146,7 +142,6 @@ test("backend failure restores exact prior settings and preserves transient keys
 test("successful apply returns the backend result and writes imported settings", async () => {
   const target = storage({
     [preferenceKeys.sidebarVisible]: "false",
-    [preferenceKeys.lastStartupUpdateCheck]: "987654321",
     "sshbrowse.future.setting": "preserve",
   });
   const imported = captureBackupPreferences(storage({
@@ -158,7 +153,6 @@ test("successful apply returns the backend result and writes imported settings",
   assert.deepEqual(result, { added: 3, skipped: 1 });
   assert.equal(target.getItem(preferenceKeys.sidebarVisible), "true");
   assert.equal(target.getItem(preferenceKeys.themeName), "fjord");
-  assert.equal(target.getItem(preferenceKeys.lastStartupUpdateCheck), "987654321");
   assert.equal(target.getItem("sshbrowse.future.setting"), "preserve");
 });
 

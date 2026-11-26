@@ -243,7 +243,7 @@ func TestBackupPreferenceValidation(t *testing.T) {
 	preferences := testBackupPreferences()
 	preferences["sshbrowse.updates.lastStartupCheck"] = "1"
 	if err := validateBackupPreferences(preferences); err == nil {
-		t.Fatal("backup accepted transient state")
+		t.Fatal("backup accepted an obsolete startup-check timestamp")
 	}
 }
 
