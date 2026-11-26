@@ -34,7 +34,7 @@ function localSession(id: number, status: "connecting" | "live" | "closed", proc
   };
 }
 
-test("tiling fills the active workspace and starts another after nine", () => {
+test("tiling fills the active workspace and starts another after twelve", () => {
   let placement = placeNewSession([], null, 1, true, 10);
   assert.deepEqual(placement.tabs, [{ id: 10, kind: "session", sessionId: 1 }]);
 
@@ -45,27 +45,27 @@ test("tiling fills the active workspace and starts another after nine", () => {
     sessionIds: [1, 2],
     selectedSessionId: 2,
   });
-  for (let sessionId = 3; sessionId <= 9; sessionId += 1) {
+  for (let sessionId = 3; sessionId <= 12; sessionId += 1) {
     placement = placeNewSession(placement.tabs, placement.activeId, sessionId, true, placement.nextTabId);
   }
   assert.equal(placement.tabs.length, 1);
   assert.deepEqual(placement.tabs[0], {
     id: 10,
     kind: "workspace",
-    sessionIds: [1, 2, 3, 4, 5, 6, 7, 8, 9],
-    selectedSessionId: 9,
+    sessionIds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    selectedSessionId: 12,
   });
 
-  placement = placeNewSession(placement.tabs, placement.activeId, 10, true, placement.nextTabId);
+  placement = placeNewSession(placement.tabs, placement.activeId, 13, true, placement.nextTabId);
   assert.equal(placement.tabs.length, 2);
-  assert.deepEqual(placement.tabs[1], { id: 11, kind: "session", sessionId: 10 });
+  assert.deepEqual(placement.tabs[1], { id: 11, kind: "session", sessionId: 13 });
 
-  placement = placeNewSession(placement.tabs, placement.activeId, 11, true, placement.nextTabId);
+  placement = placeNewSession(placement.tabs, placement.activeId, 14, true, placement.nextTabId);
   assert.deepEqual(placement.tabs[1], {
     id: 11,
     kind: "workspace",
-    sessionIds: [10, 11],
-    selectedSessionId: 11,
+    sessionIds: [13, 14],
+    selectedSessionId: 14,
   });
 });
 

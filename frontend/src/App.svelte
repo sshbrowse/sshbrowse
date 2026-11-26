@@ -1033,7 +1033,7 @@
       operationError = "SFTP needs an SSH connection; the focused session is a local shell.";
       return;
     }
-    openSFTP(session.connection);
+    openSession(session.connection, "sftp", true, false);
   }
 
   function openSession(connection: Connection | null, command: SessionCommand, autofocus: boolean, useTiling = tilingMode) {
@@ -1287,6 +1287,10 @@
     }
   }
 
+  function openNewTabPicker() {
+    openPicker(false);
+  }
+
   function openPickerSelection(connection: Connection | null) {
     openTab(connection, true, pickerTilingMode);
   }
@@ -1457,7 +1461,7 @@
   function handleApplicationShortcut(shortcut: ApplicationShortcut) {
     switch (shortcut) {
       case "newTab":
-        openPicker();
+        openNewTabPicker();
         return;
       case "newLocalTerminal":
         newLocalTerminal();
@@ -1824,9 +1828,7 @@
       });
 
     // While a dialog is up, Close Tab dismisses it and other shortcuts wait.
-    const offNewTab = Events.On("menu:newTab", () => {
-      openPicker();
-    });
+    const offNewTab = Events.On("menu:newTab", openNewTabPicker);
     const offNewLocalTerminal = Events.On("menu:newLocalTerminal", newLocalTerminal);
     const offNewSFTP = Events.On("menu:newSFTP", openSFTPForFocusedSession);
     const offNewConnection = Events.On("menu:newConnection", () => {
@@ -2037,7 +2039,7 @@
       {fontShortcuts}
       {minimiseShortcut}
       {quitShortcut}
-      onnewtab={openPicker}
+      onnewtab={openNewTabPicker}
       onnewlocal={newLocalTerminal}
       onnewsftp={openSFTPForFocusedSession}
       onnewconnection={newConnection}
@@ -2119,7 +2121,7 @@
             onselect={activateTab}
             onclose={(id) => requestClose({ kind: "tab", id })}
             onbookmark={bookmark}
-            onnew={() => openPicker(false)}
+            onnew={openNewTabPicker}
             ondrop={tileTab}
           />
         </div>
@@ -2128,7 +2130,7 @@
           class:active={tilingMode}
           aria-pressed={tilingMode}
           aria-label="Tiling mode"
-          title={`${tilingMode ? "Disable" : "Enable"} tiling mode`}
+          title="Tile sessions opened from the sidebar"
           onclick={toggleTilingMode}
           onpointerdown={(event) => event.preventDefault()}
         >
@@ -2175,20 +2177,20 @@
         onselect={activateTab}
         onclose={(id) => requestClose({ kind: "tab", id })}
         onbookmark={bookmark}
-        onnew={() => openPicker(false)}
+        onnew={openNewTabPicker}
         ondrop={tileTab}
       />
       <button
         class="toolbar-action"
         class:active={tilingMode}
         aria-pressed={tilingMode}
-        aria-label="Tile new sessions"
-        title="Open new sessions in the active workspace, up to 9 per tab"
+        aria-label="Tiling mode"
+        title="Tile sessions opened from the sidebar"
         onclick={toggleTilingMode}
         onpointerdown={(event) => event.preventDefault()}
       >
         <LayoutGrid size={16} />
-        <span class="toolbar-label">Tile new sessions</span>
+        <span class="toolbar-label">Tiling</span>
         <span class="toolbar-check" aria-hidden="true"><Check size={14} /></span>
       </button>
       <button

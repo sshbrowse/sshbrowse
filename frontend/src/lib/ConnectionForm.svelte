@@ -226,15 +226,15 @@
             onkeydown={saveOnEnter}
           />
         </label>
-        <p class="hint" id="host-hint">Enter a hostname, IP address, or alias from your SSH config.</p>
+        <p class="hint" id="host-hint">Hostname, IP address, or SSH config alias.</p>
 
         <div class="row">
           <label class="field" for="user">
-            <span>Username <em>Optional</em></span>
+            <span>Username</span>
             <input id="user" class="technical" bind:value={draft.user} spellcheck="false" autocomplete="username" aria-describedby="port-hint" onkeydown={saveOnEnter} />
           </label>
           <label class="field port-field" for="port">
-            <span>Port <em>Optional</em></span>
+            <span>Port</span>
             <input
               bind:this={portInput}
               class="technical"
@@ -246,20 +246,20 @@
             />
           </label>
         </div>
-        <p class="hint" id="port-hint">When blank, SSH uses your configured username and port, or your local username and port 22.</p>
+        <p class="hint" id="port-hint">Blank fields use your SSH config defaults, then your local username and port 22.</p>
 
         <div class="row organization-row">
           <label class="field" for="name">
-            <span>Name <em>Optional</em></span>
+            <span>Name</span>
             <!-- svelte-ignore a11y_autofocus -->
             <input id="name" bind:value={draft.name} autofocus={mode === "bookmark"} aria-describedby="folder-hint" onkeydown={saveOnEnter} />
           </label>
           <label class="field" for="folder">
-            <span>Folder <em>Optional</em></span>
+            <span>Folder</span>
             <input id="folder" bind:value={draft.folder} list="folders" aria-describedby="folder-hint" onkeydown={saveOnEnter} />
           </label>
         </div>
-        <p class="hint" id="folder-hint">Name defaults to the host; an empty Folder saves at the top level. Choose or create a folder; use / for nested folders.</p>
+        <p class="hint" id="folder-hint">Name defaults to the host. Leave Folder blank for top level. Use / for nested folders.</p>
         <datalist id="folders">
           {#each folders as folder}<option value={folder}></option>{/each}
         </datalist>

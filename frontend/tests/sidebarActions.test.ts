@@ -26,8 +26,8 @@ test("Connect in New Tab preserves existing tabs and follows tiling and capacity
     { tiling: true, selected: 1, existing: 1, sizes: [1], attempts: 1 },
     { tiling: false, selected: 3, existing: 1, sizes: [1, 1, 1], attempts: 3 },
     { tiling: true, selected: 3, existing: 1, sizes: [3], attempts: 3 },
-    { tiling: true, selected: 12, existing: 1, sizes: [9, 3], attempts: 12 },
-    { tiling: true, selected: 12, existing: 19, sizes: [9], attempts: 10 },
+    { tiling: true, selected: 15, existing: 1, sizes: [12, 3], attempts: 15 },
+    { tiling: true, selected: 15, existing: 19, sizes: [12], attempts: 13 },
     { tiling: false, selected: 3, existing: 19, sizes: [1], attempts: 2 },
     { tiling: true, selected: 3, existing: 20, sizes: [], attempts: 1 },
   ];

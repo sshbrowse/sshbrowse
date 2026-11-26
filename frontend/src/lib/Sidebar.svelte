@@ -777,7 +777,6 @@
       style:--custom-contextmenu-data={folder.path}
       aria-label={folder.path}
       aria-expanded={!collapsed[folder.path]}
-      title="Click to collapse or expand; drag onto a folder to move; right-click for actions"
       onfocus={(event) => focusFolderRow(event, folder.path)}
       onpointerdown={(event) => dragStart(event, { kind: "folder", path: folder.path })}
       onpointermove={dragMove}
@@ -841,7 +840,6 @@
   {#if connections.length === 0 && folders.length === 0}
     <div class="empty-connections">
       <strong>No saved connections</strong>
-      <p>Save a host to keep it close at hand.</p>
       <button type="button" onclick={() => onnew("")}>New connection</button>
     </div>
   {/if}
@@ -1022,8 +1020,7 @@
     font-size: var(--ui-font-small);
     line-height: 1.5;
   }
-  .empty-connections strong { color: var(--sidebar-foreground); font-weight: 500; }
-  .empty-connections p { margin: 6px 0 12px; }
+  .empty-connections strong { display: block; margin-bottom: 12px; color: var(--sidebar-foreground); font-weight: 500; }
   .empty-connections button {
     min-height: 30px;
     padding: 4px 10px;

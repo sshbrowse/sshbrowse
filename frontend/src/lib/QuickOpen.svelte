@@ -30,7 +30,6 @@
   const headingId = `${componentId}-heading`;
   const listboxId = `${componentId}-listbox`;
   const shortcutPlatform = currentPlatform();
-  const newTabShortcut = shortcutLabel("⌘T", "Ctrl+Shift+N", shortcutPlatform);
   const newLocalShortcut = shortcutLabel("⌘⇧T", "Ctrl+Shift+T", shortcutPlatform);
 
   $effect(() => {
@@ -130,11 +129,8 @@
 
 <dialog bind:this={dialog} onclose={onclose} aria-labelledby={headingId}>
   <div class="heading">
-    <div>
-      <h2 id={headingId}>Open session</h2>
-      <p>Choose a saved connection or type a destination.</p>
-    </div>
-    <kbd>{newTabShortcut}</kbd>
+    <h2 id={headingId}>Open session</h2>
+    <p>Choose a saved connection or type a destination.</p>
   </div>
   <div class="search">
     <Search class="search-icon" size={16} />
@@ -168,7 +164,6 @@
         {#if row.kind === "connect"}
           <span class="row-copy">
             <span class="name">Connect to <b>{row.text}</b></span>
-            <span class="detail">New session</span>
           </span>
         {:else}
           <span class="row-copy">
@@ -180,7 +175,7 @@
       </li>
     {/each}
     {#if rows.length === 0}
-      <li class="none">Nothing saved yet. Type a host to connect.</li>
+      <li class="none">No saved connections</li>
     {/if}
   </ul>
   {#if error}<p class="error">{error}</p>{/if}
@@ -206,10 +201,6 @@
     background: var(--overlay-backdrop-soft);
   }
   .heading {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
     margin: 0 2px 12px;
   }
   h2 {
@@ -222,14 +213,6 @@
     margin: 4px 0 0;
     color: var(--text-muted);
     font-size: var(--ui-font-small);
-  }
-  kbd {
-    padding: 3px 7px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text-muted);
-    font-size: var(--ui-font-tiny);
-    white-space: nowrap;
   }
   .search {
     display: flex;

@@ -203,7 +203,7 @@
 <section class="settings-screen" aria-label="Settings">
   <div class="settings-layout" style={`--settings-nav-width: ${Math.max(220, sidebarWidth)}px`}>
     <nav class="settings-nav" aria-label="Settings sections">
-      <div class="nav-heading"><span>SSHBrowse</span><strong>Settings</strong></div>
+      <div class="nav-heading"><strong>Settings</strong></div>
       <div class="nav-links">
         {#each sections as section}
           <button
@@ -505,9 +505,8 @@
     zoom: var(--interface-scale);
   }
   .settings-nav { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--sidebar-border); background: var(--sidebar); }
-  .nav-heading { display: flex; flex: none; flex-direction: column; gap: 3px; padding: 18px 20px; }
+  .nav-heading { flex: none; padding: 18px 20px; }
   :global(.app.mac-window-chrome) .nav-heading { padding: 48px 20px 18px; }
-  .nav-heading span { color: var(--sidebar-muted-foreground); font-size: var(--ui-font-tiny); }
   .nav-heading strong { color: var(--text-primary); font-size: var(--ui-font-heading); font-weight: 500; }
   .nav-links { display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; padding: 10px; }
   .nav-links button, .back {

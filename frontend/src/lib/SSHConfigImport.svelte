@@ -40,7 +40,7 @@
   let newCandidates = $derived(scan.candidates.filter((candidate) => !candidate.alreadyImported));
 
   $effect(() => {
-    // Each step starts on its default action; Yes only opens the chooser.
+    // Each step starts on its default action. The first action opens the chooser.
     phase;
     dialog.showModal();
     if (!working) {
@@ -123,14 +123,13 @@
 
     {#if phase === "prompt"}
       <div class="prompt body">
-        <p>Found {newCandidates.length} connection{newCandidates.length === 1 ? "" : "s"} in your SSH configuration. Review the list and choose which ones to copy.</p>
-        <p>Copied connections are managed here and saved in SSHBrowse's platform-specific configuration directory. Your original SSH configuration stays unchanged.</p>
+        <p>Found {newCandidates.length} connection{newCandidates.length === 1 ? "" : "s"} in your SSH config. SSHBrowse copies the connections you select.</p>
       </div>
       {#if error}<p class="error" role="alert">{error}</p>{/if}
       <footer>
         <span class="spacer"></span>
-        <button type="button" onclick={dismiss} disabled={working}>No</button>
-        <button bind:this={primaryButton} type="button" class="primary" onclick={() => answerPrompt(true)} disabled={working}>Yes</button>
+        <button type="button" onclick={dismiss} disabled={working}>Skip</button>
+        <button bind:this={primaryButton} type="button" class="primary" onclick={() => answerPrompt(true)} disabled={working}>Review connections</button>
       </footer>
     {:else if phase === "choose"}
       <div class="body chooser">

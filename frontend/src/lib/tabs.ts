@@ -1,7 +1,7 @@
 import type { Connection } from "../../bindings/sshbrowse/internal/profile/models";
 
 export type SessionStatus = "connecting" | "live" | "closed";
-export const maximumWorkspaceSessions = 9;
+export const maximumWorkspaceSessions = 12;
 export const maximumTabs = 20;
 
 // Which OpenSSH program runs against the connection. Ignored for a local shell.
